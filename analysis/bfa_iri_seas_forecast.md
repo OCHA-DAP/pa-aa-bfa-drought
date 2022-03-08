@@ -45,8 +45,8 @@ However the differences between leadtimes are small and
 thus should be interpreted with caution.
 
 <!-- markdownlint-disable MD013 MD033 -->
-<img src="https://iri.columbia. edu/climate/verification/images/NAskillmaps/pcp/PR1_groc_jja_Ld3.gif" alt="drawing" width="700"/> #noqa: MD033 #noqa: MD013
-<img src="https://iri.columbia.edu/climate/verification/images/NAskillmaps/pcp/PR1_groc_aso_Ld1.gif" alt="drawing" width="700"/> #noqa: MD033
+<img src="https://iri.columbia.edu/climate/verification/images/NAskillmaps/pcp/PR1_groc_jja_Ld3.gif" alt="drawing" width="700"/>
+<img src="https://iri.columbia.edu/climate/verification/images/NAskillmaps/pcp/PR1_groc_aso_Ld1.gif" alt="drawing" width="700"/>
 <!-- markdownlint-enable MD013 MD033 -->
 
 ## Load libraries and set global constants
