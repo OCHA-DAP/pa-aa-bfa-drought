@@ -71,8 +71,9 @@ from rasterio.enums import Resampling
 import hvplot.xarray
 import altair as alt
 
-from aatoolbox.pipeline import Pipeline
 import aatoolbox.utils.raster
+from aatoolbox import (create_country_config, CodAB, GeoBoundingBox,
+                       IriForecastProb, IriForecastDominant)
 ```
 
 ```python
@@ -88,24 +89,18 @@ month_season_mapping={
 ```
 
 ```python
-# leadtime_mar=3
-# leadtime_jul=1
-```
-
-```python
 iso3="bfa"
+country_config = create_country_config(iso3=iso3)
 ```
 
 ```python
-pipeline=Pipeline(iso3)
+codab = CodAB(country_config=country_config)
+# codab.download()
+gdf_adm1= codab.load(admin_level=1)
 ```
 
 ```python
-gdf_adm1=pipeline.load_codab(admin_level=1)
-```
-
-```python
-geobb=pipeline.load_geoboundingbox_gdf(gdf_adm1)
+geobb=GeoBoundingBox.from_shape(gdf_adm1)
 ```
 
 ## Set variables
@@ -142,9 +137,11 @@ These figures are the same as
 , except for the bin boundaries.
 
 ```python
-ds_iri_dom=pipeline.load_iri_dominant_tercile_seasonal_forecast(
-        geo_bounding_box=geobb
-    )
+iri_dom=IriForecastDominant(country_config,geo_bounding_box=geobb)
+```
+
+```python
+ds_iri_dom=iri_dom.load()
 ```
 
 ```python
@@ -339,9 +336,8 @@ We load the data and apply an approximate mask to our region of interest.
 #this allows us to solely look at the below-average tercile
 #C indicates the tercile (below-average, normal, or above-average).
 #F indicates the publication month, and L the leadtime
-ds_iri=pipeline.load_iri_all_terciles_seasonal_forecast(
-        geo_bounding_box=geobb
-    )
+iri_prob=IriForecastProb(country_config,geo_bounding_box=geobb)
+ds_iri=iri_prob.load()
 da_iri = ds_iri.prob
 ```
 
@@ -635,3 +631,7 @@ We didn't observe this in the limited data but we still include it for certainty
 - Forecasted patterns change with differening leadtimes.
 We didn't do an elaborate analysis of how they change and
 how we should take these changing patterns into account.
+
+```python
+
+```
