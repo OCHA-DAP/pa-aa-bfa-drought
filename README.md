@@ -43,7 +43,8 @@ Create a new virtual environment and install the requirements with
 ```shell
 pip install -r requirements.txt
 pip install cchardet
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple aa-toolbox==0.4.0.dev4
+pip install --index-url https://test.pypi.org/simple/
+--extra-index-url https://pypi.org/simple aa-toolbox==0.4.0.dev4
 pip install jupyterlab
 jupyter labextension install jupyterlab-jupytext@1.2.2
 ```
