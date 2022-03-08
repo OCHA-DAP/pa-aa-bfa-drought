@@ -1,0 +1,11 @@
+jupyter==1.0.0
+jupytext==1.11.1
+pre-commit==2.15.0
+matplotlib==3.5.1
+netCDF4==1.5.8
+altair==4.2.0
+#pin these packages cause some plot
+#types break down with later packages
+hvplot==0.7.3
+bokeh==2.4.1
+holoviews==1.14.6
