@@ -58,7 +58,6 @@ thus should be interpreted with caution.
 
 ```python
 import geopandas as gpd
-from shapely.geometry import mapping
 import pandas as pd
 import rioxarray
 import numpy as np
@@ -95,7 +94,7 @@ country_config = create_country_config(iso3=iso3)
 
 ```python
 codab = CodAB(country_config=country_config)
-# codab.download()
+codab.download()
 gdf_adm1= codab.load(admin_level=1)
 ```
 
@@ -113,9 +112,6 @@ trig_mom=[(3,3),(7,1)]
 
 ```python
 adm_sel=["Boucle du Mouhoun","Nord","Centre-Nord","Sahel"]
-# adm_sel_str=re.sub(r"[ -]", "", "".join(adm_sel)).lower()
-# threshold_mar=40
-# threshold_jul=50
 ```
 
 ```python
@@ -623,15 +619,4 @@ This is determined at the pixel level.
 We then require at least 10% of the pixels in the region of interest
 to meet this threshold during JJA or ASO.
 
-We are aware of several limitations
-
-- The threshold of 40% couldn't be validated thoroughly due to limited data availability
-- The same goes for the 5% difference requirement.
-We didn't observe this in the limited data but we still include it for certainty.
-- Forecasted patterns change with differening leadtimes.
-We didn't do an elaborate analysis of how they change and
-how we should take these changing patterns into account.
-
-```python
-
-```
+See the introduction for more conclusions/caveats
