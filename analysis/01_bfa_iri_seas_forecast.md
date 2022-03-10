@@ -475,6 +475,8 @@ and the forecast had around 10% of the area with a probability of 40% of below a
 ```python
 #% probability of bavg
 threshold=40
+#percent point diff bavg minus above avg
+threshold_diff=5
 #min percentage of the area that needs to reach the threshold
 perc_area=10
 ```
@@ -490,12 +492,22 @@ pcode0_col="ADM0_PCODE"
 gdf_aoi_dissolved=gdf_aoi.dissolve(by=adm0_col)
 gdf_aoi_dissolved=gdf_aoi_dissolved[[pcode0_col,"geometry"]]
 df_stats_aoi_bavg=da_iri_mask_bavg.aat.compute_raster_stats(
-    gdf=gdf_aoi_dissolved,feature_col=pcode0_col)
+    gdf=gdf_aoi_dissolved,feature_col=pcode0_col,percentile_list=[100-perc_area])
 da_iri_mask_thresh=da_iri_mask_bavg.where(da_iri_mask_bavg>=threshold)
 df_stats_aoi_bavg_thresh=da_iri_mask_thresh.aat.compute_raster_stats(
     gdf=gdf_aoi_dissolved,feature_col=pcode0_col)
-df_stats_aoi_bavg["perc_thresh"] = df_stats_aoi_bavg_thresh[f"count_{pcode0_col}"]/df_stats_aoi_bavg[f"count_{pcode0_col}"]*100
-df_stats_aoi_bavg["F"]=pd.to_datetime(df_stats_aoi_bavg["F"].apply(lambda x: x.strftime('%Y-%m-%d')))
+df_stats_aoi_bavg["perc_thresh_bavg"] = (df_stats_aoi_bavg_thresh[f"count_{pcode0_col}"]/
+ df_stats_aoi_bavg[f"count_{pcode0_col}"]*100)
+da_diff_bel_abv=da_iri_mask.sel(C=0)-da_iri_mask.sel(C=2)
+da_iri_mask_thresh_diff=da_iri_mask_bavg.where(
+    (da_iri_mask_bavg>=threshold)&(da_diff_bel_abv>=threshold_diff)
+)
+df_stats_aoi_bavg_diff_thresh=da_iri_mask_thresh_diff.aat.compute_raster_stats(
+    gdf=gdf_aoi_dissolved,feature_col=pcode0_col)
+df_stats_aoi_bavg["perc_thresh"] = (df_stats_aoi_bavg_diff_thresh[f"count_{pcode0_col}"]/
+ df_stats_aoi_bavg[f"count_{pcode0_col}"]*100)
+df_stats_aoi_bavg["F"]=pd.to_datetime(
+    df_stats_aoi_bavg["F"].apply(lambda x: x.strftime('%Y-%m-%d')))
 df_stats_aoi_bavg["month"]=df_stats_aoi_bavg.F.dt.month
 ```
 
@@ -517,15 +529,15 @@ We plot the occurrences of the probability of below average being above
 the given threshold and given minimum percentage of the area.
 
 ```python
-print(f"{round(len(df_stats_aoi_bavg[df_stats_aoi_bavg['perc_thresh']>=perc_area])/len(df_stats_aoi_bavg)*100)}%"
-      f"({round(len(df_stats_aoi_bavg[df_stats_aoi_bavg['perc_thresh']>=perc_area]))}/{len(df_stats_aoi_bavg)})"
+print(f"{round(len(df_stats_aoi_bavg[df_stats_aoi_bavg['perc_thresh_bavg']>=perc_area])/len(df_stats_aoi_bavg)*100)}%"
+      f"({round(len(df_stats_aoi_bavg[df_stats_aoi_bavg['perc_thresh_bavg']>=perc_area]))}/{len(df_stats_aoi_bavg)})"
       " of forecasts across all seasons and leadtimes"
       f" predicted >={perc_area}% of the area >={threshold}% prob of below average")
 ```
 
 ```python
 histo=alt.Chart(df_stats_aoi_bavg).mark_bar().encode(
-    alt.X("perc_thresh:Q", bin=alt.Bin(step=1),
+    alt.X("perc_thresh_bavg:Q", bin=alt.Bin(step=1),
           title=f"% of region with >={threshold} probability of bavg"),
     y='count()',
 ).properties(
@@ -544,15 +556,20 @@ df_stats_aoi_bavg_trig_mom=df_stats_aoi_bavg[df_stats_aoi_bavg[['month', 'L']].a
 ```
 
 ```python
-print(f"{round(len(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh']>=perc_area])/len(df_stats_aoi_bavg_trig_mom)*100)}%"
-      f"({round(len(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh']>=perc_area]))}/{len(df_stats_aoi_bavg_trig_mom)})"
+print(f"{round(len(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh_bavg']>=perc_area])/len(df_stats_aoi_bavg_trig_mom)*100)}%"
+      f"({round(len(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh_bavg']>=perc_area]))}/{len(df_stats_aoi_bavg_trig_mom)})"
       "of forecasts of moments that would be included in the trigger"
       f" predicted >={perc_area}% of the area >={threshold}% prob of below average")
 ```
 
 ```python
+print(f"Moments >={perc_area}% of the area >={threshold}% prob of below average")
+display(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh_bavg']>=perc_area])
+```
+
+```python
 histo=alt.Chart(df_stats_aoi_bavg_trig_mom).mark_bar().encode(
-    alt.X("perc_thresh:Q", bin=alt.Bin(step=1),
+    alt.X("perc_thresh_bavg:Q", bin=alt.Bin(step=1),
           title=f"% of region with >={threshold} probability of bavg"),
     y='count()',
 ).properties(
@@ -609,6 +626,12 @@ da_iri.where((da_iri.sel(C=0)-da_iri.sel(C=2)<=5),drop=True).sel(C=0).hvplot.his
     title="below average probability when there"
           "is less than 5% diff between bel avg and abv avg"
 )
+```
+
+```python
+print(f"Moments >={perc_area}% of the area >={threshold}% prob of below average"\
+     f"and below average >={threshold_diff} percent points higher than above average.")
+display(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh']>=perc_area])
 ```
 
 ### Conclusion
