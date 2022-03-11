@@ -13,10 +13,10 @@ higher than that of above average rainfall on at least 10% of the zone
 This is evaluated in mid-March for the June-August period, i.e. a leadtime
 of 3 months, and in mid-July for the August-October period,
 i.e. a leadtime of 1 month
+
 """
 import itertools
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import aatoolbox.utils.raster  # noqa: F401
 import numpy as np
@@ -33,6 +33,20 @@ from src import constants, utils
 def compute_trigger_bfa():
     """
     Compute the trigger for Burkina Faso.
+
+    Compute whether the trigger based on the below average tercile of IRI's
+    seasonal precipitation forecast has been met.
+    The trigger needs to be defined as:
+    >= `perc_area`% of `gdf_aoi` meets the condition.
+    Where the condition is defined at cell level as:
+    >=`threshold_bavg`% probability of below average rainfall and optionally
+    (%bavg-%above average) >= `threshold_diff`
+
+    For the computation of the statistics, an approximate mask of the
+    area in `gdf_aoi` is done. This is done by upsampling the raster forecast
+    data to a 0.05 degrees resolution (original resolution is 1 degree),
+    after which all upsampled cells with their  centre within `gdf_aoi` are
+    selected.
     """
     gdf_aoi, iri_prob = setup()
     # TODO: should clobber=True here?
@@ -56,20 +70,21 @@ def compute_trigger_bfa():
         threshold_diff=constants.threshold_diff,
     )
 
-    df_all, df_trig_mom = compute_trigger_bavg_iri(
-        df_stats_aoi_bavg=df_stats_aoi_bavg,
-        threshold_diff=constants.threshold_diff,
-        perc_area=constants.perc_area,
-        trig_mom=constants.trig_mom,
-    )
+    # select the months and leadtimes included in the trigger
+    df_stats_aoi_bavg_trig_mom = df_stats_aoi_bavg[
+        df_stats_aoi_bavg[["pub_month", "L"]]
+        .apply(tuple, axis=1)
+        .isin(constants.trig_mom)
+    ]
+
     # TODO: would it make more sense to have one file per prediction
     #  date? And possibly even only save the prediction dates that are
     #  included in the trigger?
-    df_all.to_csv(
+    df_stats_aoi_bavg.to_csv(
         get_trigger_output_filename(base_dir=iri_prob._processed_base_dir)
     )
 
-    df_trig_mom.to_csv(
+    df_stats_aoi_bavg_trig_mom.to_csv(
         get_trigger_output_filename(
             base_dir=iri_prob._processed_base_dir, only_trig_mom=True
         )
@@ -87,6 +102,7 @@ def setup():
     return gdf_aoi, iri_prob
 
 
+# TODO: move this to toolbox utils?
 def approx_mask_raster(
     ds: xr.Dataset,
     resolution: float = 0.05,
@@ -100,10 +116,11 @@ def approx_mask_raster(
 
     Parameters
     ----------
-    ds
+    ds: xr.Dataset
         Dataset to resample.
-    resolution
+    resolution: float, default = 0.05
         Resolution in degrees to resample to
+
     Returns
     -------
         Upsampled dataset
@@ -150,11 +167,11 @@ def compute_stats_iri(
 
     Parameters
     ----------
-    da
+    da: xr.DataArray
         DataArray containing the IRI forecast
-    gdf_aoi
+    gdf_aoi: gpd.GeoDataFrame
         GeoDataFrame of which the outer bounds are the area of interest
-    #TODO: figure out reqs dissolve
+    # TODO: figure out reqs dissolve?
     adm0_col
     pcode0_col
     threshold_bavg
@@ -228,68 +245,6 @@ def compute_stats_iri(
         ],
         axis=1,
     )
-    return df_stats_aoi_bavg
-
-
-def compute_trigger_bavg_iri(
-    df_stats_aoi_bavg,
-    perc_area: float,
-    threshold_diff: Optional[float] = None,
-    trig_mom: Optional[List[Tuple]] = None,
-) -> (pd.DataFrame, pd.DataFrame):
-    """
-    Trigger computation.
-
-    Compute whether the trigger based on the below average tercile of IRI's
-    seasonal precipitation forecast has been met.
-    The trigger needs to be defined as:
-    >= `perc_area`% of `gdf_aoi` meets the condition.
-    Where the condition is defined at cell level as:
-    >=`threshold_bavg`% probability of below average rainfall and optionally
-    (%bavg-%above average) >= `threshold_diff`
-
-    For the computation of the statistics, an approximate mask of the
-    area in `gdf_aoi` is done. This is done by upsampling the raster forecast
-    data to a 0.05 degrees resolution (original resolution is 1 degree),
-    after which all upsampled cells with their  centre within `gdf_aoi` are
-    selected.
-
-    #TODO: is there a way to automatically fill the types in the parameters
-    section?
-    Parameters
-    ----------
-    country_config
-        aa-toolbox country configuration object
-    gdf_aoi
-        GeoDataFrame of which the outer bounds are the area of interest (AOI)
-    threshold_bavg
-        minimum probability of below average precipitation for the raster
-        cell to be reaching the threshold
-    perc_area
-        minimum percentage of the area within `gdf_aoi` to reach the
-        threshold(s) for the trigger to be met
-    threshold_diff
-        minimum difference of the below average and above average
-        probability for the raster cell to be reaching the threshold
-    trig_mom
-        Moments at which to evaluate the trigger. Each tuple indicates a
-        moment, where the first entry is the publication month, and the
-        second the leadtime
-    #TODO: maybe doesnt necessarily have to be adm0. Figure out what is
-    needed for the dissolve
-    adm0_col_name:
-        column indicating adm0 col in gdf_aoi
-    pcode0_col_name
-
-    Returns
-    -------
-    Two dataframes indicating if the trigger has been met and corresponding
-    stats. One dataframe contains all dates, the other only the publication
-    date-leadtime combinations that are included in the trigger.
-
-    """
-
-    # only select cells of upsampled ds that have their centre within the aoi
 
     trigger_col = (
         "perc_thresh" if threshold_diff is not None else "perc_threshold_bavg"
@@ -297,13 +252,8 @@ def compute_trigger_bavg_iri(
     df_stats_aoi_bavg["trigger_met"] = np.where(
         df_stats_aoi_bavg[trigger_col] >= perc_area, True, False
     )
-    # select the months and leadtimes included in the trigger
-    df_stats_aoi_bavg_trig_mom = df_stats_aoi_bavg[
-        df_stats_aoi_bavg[["pub_month", "L"]]
-        .apply(tuple, axis=1)
-        .isin(trig_mom)
-    ]
-    return df_stats_aoi_bavg, df_stats_aoi_bavg_trig_mom
+
+    return df_stats_aoi_bavg
 
 
 def get_trigger_output_filename(base_dir, only_trig_mom=False) -> Path:
