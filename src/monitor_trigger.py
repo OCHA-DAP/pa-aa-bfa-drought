@@ -23,7 +23,6 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from aatoolbox import CodAB, GeoBoundingBox, IriForecastProb
-from aatoolbox.config.countryconfig import CountryConfig
 from dateutil.relativedelta import relativedelta
 from geopandas import GeoDataFrame
 from rasterio.enums import Resampling
@@ -35,189 +34,61 @@ def compute_trigger_bfa():
     """
     Compute the trigger for Burkina Faso.
     """
-    # question: does it make sense to define all vars here or should they
-    # be global constants?
-    codab = CodAB(country_config=constants.country_config)
-    codab.download()
-    gdf_adm1 = codab.load(admin_level=1)
-    adm_sel = ["Boucle du Mouhoun", "Nord", "Centre-Nord", "Sahel"]
-    gdf_aoi = gdf_adm1[gdf_adm1["ADM1_FR"].isin(adm_sel)]
-    df_all, df_trig_mom = compute_trigger_bavg_iri(
-        country_config=constants.country_config,
-        gdf_aoi=gdf_aoi,
-        threshold_bavg=40,
-        threshold_diff=5,
-        perc_area=10,
-        trig_mom=[(3, 3), (7, 1)],
-        adm0_col_name="ADM0_FR",
-    )
-    # question: would it make more sense to have one file per prediction
-    # date? And possibly even only save the prediction dates that are
-    # included in the trigger?
-    df_all.to_csv(
-        get_trigger_output_filename(
-            iso3=constants.iso3,
-            country_config=constants.country_config,
-            gdf_aoi=gdf_aoi,
-        )
-    )
-
-    df_trig_mom.to_csv(
-        get_trigger_output_filename(
-            iso3=constants.iso3,
-            country_config=constants.country_config,
-            gdf_aoi=gdf_aoi,
-            only_trig_mom=True,
-        )
-    )
-
-
-def get_trigger_output_filename(
-    iso3, country_config, gdf_aoi, only_trig_mom=False
-) -> Path:
-    # question: does it make sense to just save it in the iri dir or should
-    # we have a separate "trigger" dir?
-    iri_prob = _define_iri_class(country_config, gdf_aoi)
-    if only_trig_mom:
-        filename_substr = "trigger_moments"
-    else:
-        filename_substr = "all_dates"
-    filename = f"{iso3}_statistics_{filename_substr}.csv"
-    return iri_prob._processed_base_dir / filename
-
-
-def compute_trigger_bavg_iri(
-    country_config: CountryConfig,
-    gdf_aoi: GeoDataFrame,
-    threshold_bavg: float,
-    perc_area: float,
-    threshold_diff: Optional[float] = None,
-    trig_mom: Optional[List[Tuple]] = None,
-    adm0_col_name: str = "ADM0_FR",
-    pcode0_col_name: str = "ADM0_PCODE",
-) -> (pd.DataFrame, pd.DataFrame):
-    """
-    Trigger computation.
-
-    Compute whether the trigger based on the below average tercile of IRI's
-    seasonal precipitation forecast has been met.
-    The trigger needs to be defined as:
-    >= `perc_area`% of `gdf_aoi` meets the condition.
-    Where the condition is defined at cell level as:
-    >=`threshold_bavg`% probability of below average rainfall and optionally
-    (%bavg-%above average) >= `threshold_diff`
-
-    For the computation of the statistics, an approximate mask of the
-    area in `gdf_aoi` is done. This is done by upsampling the raster forecast
-    data to a 0.05 degrees resolution (original resolution is 1 degree),
-    after which all upsampled cells with their  centre within `gdf_aoi` are
-    selected.
-
-    #TODO: is there a way to automatically fill the types in the parameters
-    section?
-    Parameters
-    ----------
-    country_config
-        aa-toolbox country configuration object
-    gdf_aoi
-        GeoDataFrame of which the outer bounds are the area of interest (AOI)
-    threshold_bavg
-        minimum probability of below average precipitation for the raster
-        cell to be reaching the threshold
-    perc_area
-        minimum percentage of the area within `gdf_aoi` to reach the
-        threshold(s) for the trigger to be met
-    threshold_diff
-        minimum difference of the below average and above average
-        probability for the raster cell to be reaching the threshold
-    trig_mom
-        Moments at which to evaluate the trigger. Each tuple indicates a
-        moment, where the first entry is the publication month, and the
-        second the leadtime
-    #TODO: maybe doesnt necessarily have to be adm0. Figure out what is
-    needed for the dissolve
-    adm0_col_name:
-        column indicating adm0 col in gdf_aoi
-    pcode0_col_name
-
-    Returns
-    -------
-    Two dataframes indicating if the trigger has been met and corresponding
-    stats. One dataframe contains all dates, the other only the publication
-    date-leadtime combinations that are included in the trigger.
-
-    """
+    gdf_aoi, iri_prob = setup()
+    # TODO: should clobber=True here?
+    iri_prob.download()
+    iri_prob.process()
     # Load the data that contains the probability per tercile
     # this allows us to solely look at the below-average tercile
     # C indicates the tercile (below-average, normal, or above-average).
     # F indicates the publication month, and L the leadtime
-    ds_iri = load_iri_tercile_probability_forecast(
-        country_config=country_config, gdf_aoi=gdf_aoi
-    )
-    ds_iri_mask = approx_mask_raster(ds_iri, gdf_aoi)
-    # only select cells of upsampled ds that have their centre within the aoi
+    ds_iri = iri_prob.load()
+    ds_iri_mask = approx_mask_raster(ds_iri)
     ds_iri_mask = ds_iri_mask.rio.clip(gdf_aoi["geometry"], all_touched=False)
+
     df_stats_aoi_bavg = compute_stats_iri(
         da=ds_iri_mask.prob,
         gdf_aoi=gdf_aoi,
-        adm0_col=adm0_col_name,
-        pcode0_col=pcode0_col_name,
-        perc_area=perc_area,
-        threshold_bavg=threshold_bavg,
-        threshold_diff=threshold_diff,
+        adm0_col="ADM0_FR",
+        pcode0_col="ADM0_PCODE",
+        perc_area=constants.perc_area,
+        threshold_bavg=constants.threshold_bavg,
+        threshold_diff=constants.threshold_diff,
     )
-    trigger_col = (
-        "perc_thresh" if threshold_diff is not None else "perc_threshold_bavg"
+
+    df_all, df_trig_mom = compute_trigger_bavg_iri(
+        df_stats_aoi_bavg=df_stats_aoi_bavg,
+        threshold_diff=constants.threshold_diff,
+        perc_area=constants.perc_area,
+        trig_mom=constants.trig_mom,
     )
-    df_stats_aoi_bavg["trigger_met"] = np.where(
-        df_stats_aoi_bavg[trigger_col] >= perc_area, True, False
+    # TODO: would it make more sense to have one file per prediction
+    #  date? And possibly even only save the prediction dates that are
+    #  included in the trigger?
+    df_all.to_csv(
+        get_trigger_output_filename(base_dir=iri_prob._processed_base_dir)
     )
-    # select the months and leadtimes included in the trigger
-    df_stats_aoi_bavg_trig_mom = df_stats_aoi_bavg[
-        df_stats_aoi_bavg[["pub_month", "L"]]
-        .apply(tuple, axis=1)
-        .isin(trig_mom)
-    ]
-    return df_stats_aoi_bavg, df_stats_aoi_bavg_trig_mom
+
+    df_trig_mom.to_csv(
+        get_trigger_output_filename(
+            base_dir=iri_prob._processed_base_dir, only_trig_mom=True
+        )
+    )
 
 
-def _define_iri_class(country_config, gdf_aoi):
-    geobb = GeoBoundingBox.from_shape(gdf_aoi)
-    iri_prob = IriForecastProb(country_config, geo_bounding_box=geobb)
-    return iri_prob
-
-
-def load_iri_tercile_probability_forecast(
-    country_config: CountryConfig,
-    gdf_aoi: GeoDataFrame,
-) -> xr.Dataset:
-    """
-    Load the IRI seasonal tercile precipitation forecast.
-
-    Contains a probability per tercile.
-
-    Parameters
-    ----------
-    country_config
-        aa-toolbox country configuration object
-    gdf_aoi
-        GeoDataFrame of which the outer bounds are the area of interest
-
-    Returns
-    -------
-    Dataset containing the IRI seasonal precipitation forecast for the AOI
-    for all available dates and leadtimes.
-    """
-    iri_prob = _define_iri_class(country_config, gdf_aoi)
-    iri_prob.download()
-    iri_prob.process()
-    ds_iri = iri_prob.load()
-    return ds_iri
+def setup():
+    codab = CodAB(country_config=constants.country_config)
+    gdf_adm1 = codab.load(admin_level=1)
+    gdf_aoi = gdf_adm1[gdf_adm1["ADM1_FR"].isin(constants.adm_sel)]
+    geobb = GeoBoundingBox.from_shape(gdf_adm1)
+    iri_prob = IriForecastProb(
+        country_config=constants.country_config, geo_bounding_box=geobb
+    )
+    return gdf_aoi, iri_prob
 
 
 def approx_mask_raster(
     ds: xr.Dataset,
-    gdf: GeoDataFrame,
     resolution: float = 0.05,
 ) -> xr.Dataset:
     """
@@ -358,6 +229,92 @@ def compute_stats_iri(
         axis=1,
     )
     return df_stats_aoi_bavg
+
+
+def compute_trigger_bavg_iri(
+    df_stats_aoi_bavg,
+    perc_area: float,
+    threshold_diff: Optional[float] = None,
+    trig_mom: Optional[List[Tuple]] = None,
+) -> (pd.DataFrame, pd.DataFrame):
+    """
+    Trigger computation.
+
+    Compute whether the trigger based on the below average tercile of IRI's
+    seasonal precipitation forecast has been met.
+    The trigger needs to be defined as:
+    >= `perc_area`% of `gdf_aoi` meets the condition.
+    Where the condition is defined at cell level as:
+    >=`threshold_bavg`% probability of below average rainfall and optionally
+    (%bavg-%above average) >= `threshold_diff`
+
+    For the computation of the statistics, an approximate mask of the
+    area in `gdf_aoi` is done. This is done by upsampling the raster forecast
+    data to a 0.05 degrees resolution (original resolution is 1 degree),
+    after which all upsampled cells with their  centre within `gdf_aoi` are
+    selected.
+
+    #TODO: is there a way to automatically fill the types in the parameters
+    section?
+    Parameters
+    ----------
+    country_config
+        aa-toolbox country configuration object
+    gdf_aoi
+        GeoDataFrame of which the outer bounds are the area of interest (AOI)
+    threshold_bavg
+        minimum probability of below average precipitation for the raster
+        cell to be reaching the threshold
+    perc_area
+        minimum percentage of the area within `gdf_aoi` to reach the
+        threshold(s) for the trigger to be met
+    threshold_diff
+        minimum difference of the below average and above average
+        probability for the raster cell to be reaching the threshold
+    trig_mom
+        Moments at which to evaluate the trigger. Each tuple indicates a
+        moment, where the first entry is the publication month, and the
+        second the leadtime
+    #TODO: maybe doesnt necessarily have to be adm0. Figure out what is
+    needed for the dissolve
+    adm0_col_name:
+        column indicating adm0 col in gdf_aoi
+    pcode0_col_name
+
+    Returns
+    -------
+    Two dataframes indicating if the trigger has been met and corresponding
+    stats. One dataframe contains all dates, the other only the publication
+    date-leadtime combinations that are included in the trigger.
+
+    """
+
+    # only select cells of upsampled ds that have their centre within the aoi
+
+    trigger_col = (
+        "perc_thresh" if threshold_diff is not None else "perc_threshold_bavg"
+    )
+    df_stats_aoi_bavg["trigger_met"] = np.where(
+        df_stats_aoi_bavg[trigger_col] >= perc_area, True, False
+    )
+    # select the months and leadtimes included in the trigger
+    df_stats_aoi_bavg_trig_mom = df_stats_aoi_bavg[
+        df_stats_aoi_bavg[["pub_month", "L"]]
+        .apply(tuple, axis=1)
+        .isin(trig_mom)
+    ]
+    return df_stats_aoi_bavg, df_stats_aoi_bavg_trig_mom
+
+
+def get_trigger_output_filename(base_dir, only_trig_mom=False) -> Path:
+    # TODO: does it make sense to just save it in the iri dir or should
+    #  we have a separate "trigger" dir?
+    if only_trig_mom:
+        filename_substr = "trigger_moments"
+    else:
+        filename_substr = "all_dates"
+    filename = f"{constants.iso3}_statistics_{filename_substr}.csv"
+    return base_dir / filename
 
 
 if __name__ == "__main__":

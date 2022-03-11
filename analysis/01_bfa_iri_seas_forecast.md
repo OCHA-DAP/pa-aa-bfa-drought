@@ -76,9 +76,16 @@ from aatoolbox import (
     CodAB,
     IriForecastProb,
     IriForecastDominant,
+    GeoBoundingBox,
 )
 
 from src import utils, constants
+```
+
+## Set variables
+
+```python
+hdx_blue = "#007ce0"
 ```
 
 ```python
@@ -86,22 +93,7 @@ from src import utils, constants
 codab = CodAB(country_config=constants.country_config)
 gdf_adm1 = codab.load(admin_level=1)
 geobb = GeoBoundingBox.from_shape(gdf_adm1)
-```
-
-## Set variables
-
-```python
-# list of months and leadtimes that could be part of the trigger
-# first entry refers to the publication month, second to the leadtime
-trig_mom = [(3, 3), (7, 1)]
-```
-
-```python
-adm_sel = ["Boucle du Mouhoun", "Nord", "Centre-Nord", "Sahel"]
-```
-
-```python
-gdf_aoi = gdf_adm1[gdf_adm1.ADM1_FR.isin(adm_sel)]
+gdf_aoi = gdf_adm1[gdf_adm1.ADM1_FR.isin(constants.adm_sel)]
 ```
 
 ## Inspect forecasts

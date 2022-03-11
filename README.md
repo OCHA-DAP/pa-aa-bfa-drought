@@ -50,13 +50,48 @@ Common Operational Datasets (CODs) on HDX.
 
 ## Reproducing this analysis
 
-Create a new virtual environment and install the requirements with
+Create a directory where you would like the data to be stored,
+and point to it using an environment variable called
+`AA_DATA_DIR`.
+
+Next create a new virtual environment and install the requirements with:
 
 ```shell
 pip install --index-url https://test.pypi.org/simple/ \
 --extra-index-url https://pypi.org/simple aa-toolbox==0.4.0.dev9
 pip install -r requirements.txt
 ```
+
+Install `src` as a package so that its contents can be used by the notebooks:
+
+```shell
+pip install -e .
+```
+
+To run the pipeline that downloads and processes the data, execute:
+
+```shell
+python src/main.py
+```
+
+To see runtime options, execute:
+
+```shell
+python src/main.py -h
+```
+
+If you would like to instead receive the processed data from our team, please
+[contact us](mailto:centrehumdata@un.org).
+
+### Monitoring
+
+To monitor the trigger, run:
+
+```shell
+python src/monitor.py
+```
+
+## Development
 
 All code is formatted according to black and flake8 guidelines.
 The repo is set-up to use pre-commit.
@@ -75,9 +110,3 @@ You can run all hooks against all your files using
 ```shell
 pre-commit run --all-files
 ```
-
-All data used can be downloaded through toolbox, but you can also choose to
-sync [this](<https://drive.google.com/drive/u/3/folders/1RVpnCUpxHQ-jokV_27xLRqOs6qR_8mqQ>)
-directory from Google drive to your local machine that contains all the data.
-Create an environment variable called `AA_DATA_DIR`
-that points to this directory.
