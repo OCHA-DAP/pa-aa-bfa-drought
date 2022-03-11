@@ -1,13 +1,15 @@
 altair==4.2.0
-#required for toolbox but gives issues on Mac when not installed first
-chardet==4.0.0
-jupyter==1.0.0
-jupytext==1.11.1
-pre-commit==2.15.0
-matplotlib==3.5.1
-netCDF4==1.5.8
-#pin these packages cause some plot
-#types break down with later packages
 bokeh==2.4.1
-hvplot==0.7.3
+geopandas==0.10.2
 holoviews==1.14.6
+hvplot==0.7.3
+jupyter==1.0.0
+jupytext==1.13.7
+pre-commit==2.17.0
+matplotlib==3.5.1
+numpy==1.22.3
+netCDF4==1.5.8
+pandas==1.4.1
+python-dateutil==2.8.2
+rasterio==1.2.10
+xarray==2022.3.0

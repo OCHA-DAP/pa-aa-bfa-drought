@@ -7,14 +7,12 @@ The trigger is based on IRI's seasonal tercile precipitation forecast.
 The definition of the trigger is:
 1. 40% or more probability of below average rainfall AND
 2. The probability of below average rainfall should be 5 percentage points
-higher than that of above average rainfall.
-on  at  least  10%  of  the  zone
-(Boucle  de  Mouhoun,  Centre  Nord,  Sahel,  and  Nord)
+higher than that of above average rainfall on at least 10% of the zone
+(Boucle de Mouhoun, Centre Nord, Sahel, and Nord)
 
 This is evaluated in mid-March for the June-August period, i.e. a leadtime
-of 3 months,  and in mid-July for the August-October period,
+of 3 months, and in mid-July for the August-October period,
 i.e. a leadtime of 1 month
-
 """
 import itertools
 from calendar import month_name
@@ -25,18 +23,13 @@ import aatoolbox.utils.raster  # noqa: F401
 import numpy as np
 import pandas as pd
 import xarray as xr
-from aatoolbox import (
-    CodAB,
-    GeoBoundingBox,
-    IriForecastProb,
-    create_country_config,
-)
+from aatoolbox import CodAB, GeoBoundingBox, IriForecastProb
 from aatoolbox.config.countryconfig import CountryConfig
 from dateutil.relativedelta import relativedelta
-
-# question: should we import libraries just for typing?
 from geopandas import GeoDataFrame
 from rasterio.enums import Resampling
+
+from src import constants
 
 # number of months that is considered a season
 SEAS_LEN = 3
@@ -56,15 +49,13 @@ def compute_trigger_bfa():
     """
     # question: does it make sense to define all vars here or should they
     # be global constants?
-    iso3 = "bfa"
-    country_config = create_country_config(iso3=iso3)
-    codab = CodAB(country_config=country_config)
+    codab = CodAB(country_config=constants.country_config)
     codab.download()
     gdf_adm1 = codab.load(admin_level=1)
     adm_sel = ["Boucle du Mouhoun", "Nord", "Centre-Nord", "Sahel"]
     gdf_aoi = gdf_adm1[gdf_adm1["ADM1_FR"].isin(adm_sel)]
     df_all, df_trig_mom = compute_trigger_bavg_iri(
-        country_config=country_config,
+        country_config=constants.country_config,
         gdf_aoi=gdf_aoi,
         threshold_bavg=40,
         threshold_diff=5,
@@ -77,14 +68,16 @@ def compute_trigger_bfa():
     # included in the trigger?
     df_all.to_csv(
         get_trigger_output_filename(
-            iso3=iso3, country_config=country_config, gdf_aoi=gdf_aoi
+            iso3=constants.iso3,
+            country_config=constants.country_config,
+            gdf_aoi=gdf_aoi,
         )
     )
 
     df_trig_mom.to_csv(
         get_trigger_output_filename(
-            iso3=iso3,
-            country_config=country_config,
+            iso3=constants.iso3,
+            country_config=constants.country_config,
             gdf_aoi=gdf_aoi,
             only_trig_mom=True,
         )
@@ -114,8 +107,7 @@ def compute_trigger_bavg_iri(
     trig_mom: Optional[List[Tuple]] = None,
     adm0_col_name: str = "ADM0_FR",
     pcode0_col_name: str = "ADM0_PCODE",
-    # TODO: how to indicate several returns?
-) -> pd.DataFrame:
+) -> (pd.DataFrame, pd.DataFrame):
     """
     Trigger computation.
 
