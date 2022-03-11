@@ -15,7 +15,6 @@ of 3 months, and in mid-July for the August-October period,
 i.e. a leadtime of 1 month
 """
 import itertools
-from calendar import month_name
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -29,18 +28,7 @@ from dateutil.relativedelta import relativedelta
 from geopandas import GeoDataFrame
 from rasterio.enums import Resampling
 
-from src import constants
-
-# number of months that is considered a season
-SEAS_LEN = 3
-# map month number to str of abbreviations of month names
-# month number refers to the last month of the season
-END_MONTH_SEASON_MAPPING = {
-    m: "".join(
-        [month_name[(m - i) % 12 + 1][0] for i in range(SEAS_LEN, 0, -1)]
-    )
-    for m in range(1, 13)
-}
+from src import constants, utils
 
 
 def compute_trigger_bfa():
@@ -364,7 +352,7 @@ def compute_stats_iri(
     )
     df_stats_aoi_bavg["pub_month"] = df_stats_aoi_bavg.F.dt.month
     df_stats_aoi_bavg["pred_seas"] = df_stats_aoi_bavg.apply(
-        lambda x: END_MONTH_SEASON_MAPPING[
+        lambda x: utils.get_month_season_mapping()[
             int((x["F"] + relativedelta(months=int(x["L"]))).strftime("%-m"))
         ],
         axis=1,

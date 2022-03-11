@@ -54,6 +54,7 @@ thus should be interpreted with caution.
 ```python
 %load_ext autoreload
 %autoreload 2
+%load_ext jupyter_black
 ```
 
 ```python
@@ -71,51 +72,36 @@ import hvplot.xarray
 import altair as alt
 
 import aatoolbox.utils.raster
-from aatoolbox import (create_country_config, CodAB, GeoBoundingBox,
-                       IriForecastProb, IriForecastDominant)
+from aatoolbox import (
+    CodAB,
+    IriForecastProb,
+    IriForecastDominant,
+)
+
+from src import utils, constants
 ```
 
 ```python
-hdx_blue="#007ce0"
-```
-
-```python
-#month number refers to the last month of the season
-month_season_mapping={
-    1:"NDJ",2:"DJF",3:"JFM",4:"FMA",5:"MAM",6:"AMJ",
-    7:"MJJ",8:"JJA",9:"JAS",10:"ASO",11:"SON",12:"OND"
-}
-```
-
-```python
-iso3="bfa"
-country_config = create_country_config(iso3=iso3)
-```
-
-```python
-codab = CodAB(country_config=country_config)
-codab.download()
-gdf_adm1= codab.load(admin_level=1)
-```
-
-```python
-geobb=GeoBoundingBox.from_shape(gdf_adm1)
+# Get geometry parameters
+codab = CodAB(country_config=constants.country_config)
+gdf_adm1 = codab.load(admin_level=1)
+geobb = GeoBoundingBox.from_shape(gdf_adm1)
 ```
 
 ## Set variables
 
 ```python
-#list of months and leadtimes that could be part of the trigger
-#first entry refers to the publication month, second to the leadtime
-trig_mom=[(3,3),(7,1)]
+# list of months and leadtimes that could be part of the trigger
+# first entry refers to the publication month, second to the leadtime
+trig_mom = [(3, 3), (7, 1)]
 ```
 
 ```python
-adm_sel=["Boucle du Mouhoun","Nord","Centre-Nord","Sahel"]
+adm_sel = ["Boucle du Mouhoun", "Nord", "Centre-Nord", "Sahel"]
 ```
 
 ```python
-gdf_aoi=gdf_adm1[gdf_adm1.ADM1_FR.isin(adm_sel)]
+gdf_aoi = gdf_adm1[gdf_adm1.ADM1_FR.isin(adm_sel)]
 ```
 
 ## Inspect forecasts
@@ -133,45 +119,51 @@ These figures are the same as
 , except for the bin boundaries.
 
 ```python
-iri_dom=IriForecastDominant(country_config,geo_bounding_box=geobb)
+iri_dom = IriForecastDominant(constants.country_config, geo_bounding_box=geobb)
 ```
 
 ```python
-ds_iri_dom=iri_dom.load()
+ds_iri_dom = iri_dom.load()
 ```
 
 ```python
-da_iri_dom=ds_iri_dom.dominant
+da_iri_dom = ds_iri_dom.dominant
 ```
 
 ```python
-#F indicates the publication month, and L the leadtime.
-#A leadtime of 1 means a forecast published in May is forecasting JJA
-da_iri_dom_clip=da_iri_dom.rio.clip(gdf_adm1["geometry"], all_touched=True)
+# F indicates the publication month, and L the leadtime.
+# A leadtime of 1 means a forecast published in May is forecasting JJA
+da_iri_dom_clip = da_iri_dom.rio.clip(gdf_adm1["geometry"], all_touched=True)
 ```
 
 ```python
-def plt_raster_iri(da_iri_dom_clip,
-                   pub_mon,
-                   lt,
-                   plt_levels,
-                   plt_colors,
-                  ):
-    for_seas=month_season_mapping[(pub_mon+lt+1)%12+1]
-    g=da_iri_dom_clip.where(da_iri_dom_clip.F.dt.month.isin([pub_mon]),
-                            drop=True).sel(L=lt).plot(
-    col="F",
-    col_wrap=5,
-    levels=plt_levels,
-    colors=plt_colors,
-    cbar_kwargs={
-        "orientation": "horizontal",
-        "shrink": 0.8,
-        "aspect": 40,
-        "pad": 0.1,
-        'ticks': plt_levels,
-    },
-    figsize=(25,7)
+def plt_raster_iri(
+    da_iri_dom_clip,
+    pub_mon,
+    lt,
+    plt_levels,
+    plt_colors,
+):
+    for_seas = utils.get_month_season_mapping()[(pub_mon + lt + 1) % 12 + 1]
+    g = (
+        da_iri_dom_clip.where(
+            da_iri_dom_clip.F.dt.month.isin([pub_mon]), drop=True
+        )
+        .sel(L=lt)
+        .plot(
+            col="F",
+            col_wrap=5,
+            levels=plt_levels,
+            colors=plt_colors,
+            cbar_kwargs={
+                "orientation": "horizontal",
+                "shrink": 0.8,
+                "aspect": 40,
+                "pad": 0.1,
+                "ticks": plt_levels,
+            },
+            figsize=(25, 7),
+        )
     )
     for ax in g.axes.flat:
         gdf_adm1.boundary.plot(linewidth=1, ax=ax, color="grey")
@@ -179,29 +171,51 @@ def plt_raster_iri(da_iri_dom_clip,
         ax.axis("off")
 
     g.fig.suptitle(
-        (f"Forecasts published in {calendar.month_abbr[pub_mon]} predicting"
-    f"{for_seas} (lt={lt}) \n The subtitles indicate the publishing date"),
-    y=1.1);
+        (
+            f"Forecasts published in {calendar.month_abbr[pub_mon]} predicting"
+            f"{for_seas} (lt={lt}) \n The subtitles indicate the publishing date"
+        ),
+        y=1.1,
+    );
 ```
 
 ```python
-#iri website bins
+# iri website bins
 # plt_levels=[-100,-67.5,-57.5,-47.5,-42.5,-37.5,37.5,42.5,47.5,57.5,67.5,100]
-#rounded bins for easier interpretability
-plt_levels=[-100,-70,-60,-50,-45,-40,40,45,50,60,70,100]
-plt_colors=(['#783200','#ab461e','#d18132','#e8b832','#fafa02','#ffffff',
-             '#d1f8cc','#acf8a0','#73bb6e','#3a82b3','#0e3bf4'])
+# rounded bins for easier interpretability
+plt_levels = [-100, -70, -60, -50, -45, -40, 40, 45, 50, 60, 70, 100]
+plt_colors = [
+    "#783200",
+    "#ab461e",
+    "#d18132",
+    "#e8b832",
+    "#fafa02",
+    "#ffffff",
+    "#d1f8cc",
+    "#acf8a0",
+    "#73bb6e",
+    "#3a82b3",
+    "#0e3bf4",
+]
 ```
 
 ```python
 plt_raster_iri(
-    da_iri_dom_clip,pub_mon=3,lt=3,plt_levels=plt_levels,plt_colors=plt_colors
+    da_iri_dom_clip,
+    pub_mon=3,
+    lt=3,
+    plt_levels=plt_levels,
+    plt_colors=plt_colors,
 )
 ```
 
 ```python
 plt_raster_iri(
-    da_iri_dom_clip,pub_mon=7,lt=1,plt_levels=plt_levels,plt_colors=plt_colors
+    da_iri_dom_clip,
+    pub_mon=7,
+    lt=1,
+    plt_levels=plt_levels,
+    plt_colors=plt_colors,
 )
 ```
 
@@ -220,7 +234,11 @@ which serves as a reminder that predictions change over time
 
 ```python
 plt_raster_iri(
-    da_iri_dom_clip,pub_mon=5,lt=1,plt_levels=plt_levels,plt_colors=plt_colors
+    da_iri_dom_clip,
+    pub_mon=5,
+    lt=1,
+    plt_levels=plt_levels,
+    plt_colors=plt_colors,
 )
 ```
 
@@ -233,24 +251,32 @@ These figures are to guide the discussion on which forecasts
 we would have wanted to trigger and for which we wouldn't
 
 ```python
-g=da_iri_dom_clip.where(
-    da_iri_dom_clip.F.isin([cftime.Datetime360Day(2021, 8, 16, 0, 0, 0, 0),
-                            cftime.Datetime360Day(2020, 3, 16, 0, 0, 0, 0),
-                            cftime.Datetime360Day(2021, 9, 16, 0, 0, 0, 0),]),
-    drop=True
-).sel(L=1).plot(
-    col="F",
-    col_wrap=4,
-    levels=plt_levels,
-    colors=plt_colors,
-    cbar_kwargs={
-        "orientation": "horizontal",
-        "shrink": 0.8,
-        "aspect": 40,
-        "pad": 0.1,
-        'ticks': plt_levels,
-    },
-    figsize=(15,7)
+g = (
+    da_iri_dom_clip.where(
+        da_iri_dom_clip.F.isin(
+            [
+                cftime.Datetime360Day(2021, 8, 16, 0, 0, 0, 0),
+                cftime.Datetime360Day(2020, 3, 16, 0, 0, 0, 0),
+                cftime.Datetime360Day(2021, 9, 16, 0, 0, 0, 0),
+            ]
+        ),
+        drop=True,
+    )
+    .sel(L=1)
+    .plot(
+        col="F",
+        col_wrap=4,
+        levels=plt_levels,
+        colors=plt_colors,
+        cbar_kwargs={
+            "orientation": "horizontal",
+            "shrink": 0.8,
+            "aspect": 40,
+            "pad": 0.1,
+            "ticks": plt_levels,
+        },
+        figsize=(15, 7),
+    )
 )
 for ax in g.axes.flat:
     gdf_adm1.boundary.plot(linewidth=1, ax=ax, color="grey")
@@ -269,14 +295,18 @@ After discussion we concluded that the approximate
 mask is a valid method and thus use this further on.
 
 ```python
-#sel random values to enable easy plotting of included cells (so values are irrelevant)
-da_iri_dom_blue=da_iri_dom.sel(F="2020-05-16",L=1).squeeze()
+# sel random values to enable easy plotting of included cells (so values are irrelevant)
+da_iri_dom_blue = da_iri_dom.sel(F="2020-05-16", L=1).squeeze()
 ```
 
 ```python
-da_iri_dom_blue_centre=da_iri_dom_blue.rio.clip(gdf_aoi["geometry"], all_touched=False)
-g=da_iri_dom_blue_centre.plot.imshow(cmap=ListedColormap([hdx_blue]),figsize=(6,10),add_colorbar=False)
-gdf_adm1.boundary.plot(ax=g.axes,color="grey");
+da_iri_dom_blue_centre = da_iri_dom_blue.rio.clip(
+    gdf_aoi["geometry"], all_touched=False
+)
+g = da_iri_dom_blue_centre.plot.imshow(
+    cmap=ListedColormap([hdx_blue]), figsize=(6, 10), add_colorbar=False
+)
+gdf_adm1.boundary.plot(ax=g.axes, color="grey")
 g.axes.set_title(
     "Included area with cell centres:"
     f"{da_iri_dom_blue_centre.count().values} cells included"
@@ -286,9 +316,13 @@ g.axes.axis("off");
 ```
 
 ```python
-da_iri_dom_blue_touched=da_iri_dom_blue.rio.clip(gdf_aoi["geometry"], all_touched=True)
-g=da_iri_dom_blue_touched.plot.imshow(cmap=ListedColormap([hdx_blue]),figsize=(6,10),add_colorbar=False)
-gdf_adm1.boundary.plot(ax=g.axes,color="grey");
+da_iri_dom_blue_touched = da_iri_dom_blue.rio.clip(
+    gdf_aoi["geometry"], all_touched=True
+)
+g = da_iri_dom_blue_touched.plot.imshow(
+    cmap=ListedColormap([hdx_blue]), figsize=(6, 10), add_colorbar=False
+)
+gdf_adm1.boundary.plot(ax=g.axes, color="grey")
 g.axes.set_title(
     f"Included area with all cells touching:"
     "{da_iri_dom_blue_touched.count().values} cells included"
@@ -298,21 +332,23 @@ g.axes.axis("off");
 ```
 
 ```python
-#approximate of a mask
+# approximate of a mask
 da_iri_dom_blue_res = da_iri_dom_blue.rio.reproject(
     da_iri_dom_blue.rio.crs,
-    #resolution it will be changed to, original is 1
+    # resolution it will be changed to, original is 1
     resolution=0.05,
-    #use nearest so cell values stay the same, only cut
-    #into smaller pieces
+    # use nearest so cell values stay the same, only cut
+    # into smaller pieces
     resampling=Resampling.nearest,
     nodata=np.nan,
 ).rio.clip(gdf_aoi["geometry"], all_touched=False)
 ```
 
 ```python
-g=da_iri_dom_blue_res.plot.imshow(cmap=ListedColormap([hdx_blue]),figsize=(6,10),add_colorbar=False)
-gdf_adm1.boundary.plot(ax=g.axes,color="grey");
+g = da_iri_dom_blue_res.plot.imshow(
+    cmap=ListedColormap([hdx_blue]), figsize=(6, 10), add_colorbar=False
+)
+gdf_adm1.boundary.plot(ax=g.axes, color="grey")
 g.axes.set_title(f"Included area with approx mask")
 gdf_aoi.boundary.plot(linewidth=1, ax=g.axes, color="red")
 g.axes.axis("off");
@@ -328,48 +364,54 @@ regardless of the values of the other terciles.
 We load the data and apply an approximate mask to our region of interest.
 
 ```python
-#Load the data that contains the probability per tercile
-#this allows us to solely look at the below-average tercile
-#C indicates the tercile (below-average, normal, or above-average).
-#F indicates the publication month, and L the leadtime
-iri_prob=IriForecastProb(country_config,geo_bounding_box=geobb)
-ds_iri=iri_prob.load()
+# Load the data that contains the probability per tercile
+# this allows us to solely look at the below-average tercile
+# C indicates the tercile (below-average, normal, or above-average).
+# F indicates the publication month, and L the leadtime
+iri_prob = IriForecastProb(constants.country_config, geo_bounding_box=geobb)
+ds_iri = iri_prob.load()
 da_iri = ds_iri.prob
 ```
 
 ```python
-#select all cells touching the region
-da_iri_allt=da_iri.rio.clip(gdf_aoi["geometry"], all_touched=True)
-#C=0 indicates the below average tercile
-da_iri_allt_bavg=da_iri_allt.sel(C=0)
+# select all cells touching the region
+da_iri_allt = da_iri.rio.clip(gdf_aoi["geometry"], all_touched=True)
+# C=0 indicates the below average tercile
+da_iri_allt_bavg = da_iri_allt.sel(C=0)
 ```
 
 ```python
-#upsample the resolution in order to create a mask of our aoi
+# upsample the resolution in order to create a mask of our aoi
 resolution = 0.05
-mask_list=[]
+mask_list = []
 for terc in da_iri_allt.C.values:
     for lt in da_iri_allt.L.values:
-        da_terc_lt = da_iri_allt.sel(C=terc,L=lt)
+        da_terc_lt = da_iri_allt.sel(C=terc, L=lt)
         da_terc_lt_mask = da_terc_lt.rio.reproject(
             da_terc_lt.rio.crs,
             resolution=resolution,
             resampling=Resampling.nearest,
             nodata=np.nan,
         )
-        mask_list.append(da_terc_lt_mask.expand_dims({"C":[terc],"L":[lt]}))
-da_iri_mask=xr.combine_by_coords(mask_list).rio.clip(gdf_aoi["geometry"],all_touched=False).prob
+        mask_list.append(da_terc_lt_mask.expand_dims({"C": [terc], "L": [lt]}))
+da_iri_mask = (
+    xr.combine_by_coords(mask_list)
+    .rio.clip(gdf_aoi["geometry"], all_touched=False)
+    .prob
+)
 # reproject changes longitude and latitude name to x and y
 # so change back here
-da_iri_mask = da_iri_mask.rename(
-    {"x": "longitude", "y": "latitude"}
-)
-da_iri_mask_bavg=da_iri_mask.sel(C=0)
+da_iri_mask = da_iri_mask.rename({"x": "longitude", "y": "latitude"})
+da_iri_mask_bavg = da_iri_mask.sel(C=0)
 ```
 
 ```python
-#check that masking is done correctly
-g=da_iri_mask.sel(F="2021-03-16",L=2,C=0).squeeze().plot.imshow(cmap=ListedColormap([hdx_blue]),add_colorbar=False)
+# check that masking is done correctly
+g = (
+    da_iri_mask.sel(F="2021-03-16", L=2, C=0)
+    .squeeze()
+    .plot.imshow(cmap=ListedColormap([hdx_blue]), add_colorbar=False)
+)
 gdf_adm1.boundary.plot(ax=g.axes);
 ```
 
@@ -411,42 +453,44 @@ in combination with the 20% of the area requirement,
 but at the same time we estimate it to be possible to occur.
 
 ```python
-#TODO: also change this to violin plot
-da_iri.sel(C=0).hvplot.box('prob',alpha=0.5).opts(ylabel="Probability below average",
-title="Forecasted probabilities of below average"
-      "\n at raster level in the whole world across all seasons and leadtimes, 2017-2021")
+# TODO: also change this to violin plot
+da_iri.sel(C=0).hvplot.box("prob", alpha=0.5).opts(
+    ylabel="Probability below average",
+    title="Forecasted probabilities of below average"
+    "\n at raster level in the whole world across all seasons and leadtimes, 2017-2021",
+)
 ```
 
 ```python
-#TODO: would want to replace `box` by `violin`
-#but for some reason violin is not working in this env
-#on my `antact` env it is working so has to do smth with the env
-#but cannot figure out what
-#already matched versions of hvplot, bokeh, and holoviews
-da_iri_mask_bavg.hvplot.box(
-    'prob',by="L",color='L', cmap='Category20'
-).opts(
+# TODO: would want to replace `box` by `violin`
+# but for some reason violin is not working in this env
+# on my `antact` env it is working so has to do smth with the env
+# but cannot figure out what
+# already matched versions of hvplot, bokeh, and holoviews
+da_iri_mask_bavg.hvplot.box("prob", by="L", color="L", cmap="Category20").opts(
     ylabel="Probability below average",
     xlabel="leadtime",
-title="Observed probabilities of bavg at raster level in the region of interest")
+    title="Observed probabilities of bavg at raster level in the region of interest",
+)
 ```
 
 ```python
-#transform data such that we can select
+# transform data such that we can select
 # by combination of publication month (F) and leadtime (L)
-da_plt=da_iri_mask_bavg.assign_coords(F=da_iri_mask_bavg.F.dt.month)
-da_plt=da_plt.stack(comb=["F","L"])
-#only select data that is selected for trigger
-da_iri_mask_trig_mom=xr.concat([da_plt.sel(comb=m) for m in trig_mom],dim="comb")
+da_plt = da_iri_mask_bavg.assign_coords(F=da_iri_mask_bavg.F.dt.month)
+da_plt = da_plt.stack(comb=["F", "L"])
+# only select data that is selected for trigger
+da_iri_mask_trig_mom = xr.concat(
+    [da_plt.sel(comb=m) for m in trig_mom], dim="comb"
+)
 ```
 
 ```python
-da_iri_mask_trig_mom.hvplot.box(
-    'prob'
-).opts(ylabel="Probability below average",
-       title="observed probabilities of bavg for the month and leadtime"
-             "combinations \n included in the triger"
-       )
+da_iri_mask_trig_mom.hvplot.box("prob").opts(
+    ylabel="Probability below average",
+    title="observed probabilities of bavg for the month and leadtime"
+    "combinations \n included in the triger",
+)
 ```
 
 #### Compute stats
@@ -474,41 +518,55 @@ and the forecast had around 10% of the area with a probability of 40% of below a
 
 ```python
 #% probability of bavg
-threshold=40
-#percent point diff bavg minus above avg
-threshold_diff=5
-#min percentage of the area that needs to reach the threshold
-perc_area=10
+threshold = 40
+# percent point diff bavg minus above avg
+threshold_diff = 5
+# min percentage of the area that needs to reach the threshold
+perc_area = 10
 ```
 
 ```python
-adm0_col="ADM0_FR"
-pcode0_col="ADM0_PCODE"
+adm0_col = "ADM0_FR"
+pcode0_col = "ADM0_PCODE"
 ```
 
 ```python
-#compute stats
-#dissolve the region to one polygon
-gdf_aoi_dissolved=gdf_aoi.dissolve(by=adm0_col)
-gdf_aoi_dissolved=gdf_aoi_dissolved[[pcode0_col,"geometry"]]
-df_stats_aoi_bavg=da_iri_mask_bavg.aat.compute_raster_stats(
-    gdf=gdf_aoi_dissolved,feature_col=pcode0_col,percentile_list=[100-perc_area])
-da_iri_mask_thresh=da_iri_mask_bavg.where(da_iri_mask_bavg>=threshold)
-df_stats_aoi_bavg_thresh=da_iri_mask_thresh.aat.compute_raster_stats(
-    gdf=gdf_aoi_dissolved,feature_col=pcode0_col)
-df_stats_aoi_bavg["perc_thresh_bavg"] = (df_stats_aoi_bavg_thresh[f"count_{pcode0_col}"]/
- df_stats_aoi_bavg[f"count_{pcode0_col}"]*100)
-da_diff_bel_abv=da_iri_mask.sel(C=0)-da_iri_mask.sel(C=2)
-da_iri_mask_thresh_diff=da_iri_mask_bavg.where(
-    (da_iri_mask_bavg>=threshold)&(da_diff_bel_abv>=threshold_diff)
+# compute stats
+# dissolve the region to one polygon
+gdf_aoi_dissolved = gdf_aoi.dissolve(by=adm0_col)
+gdf_aoi_dissolved = gdf_aoi_dissolved[[pcode0_col, "geometry"]]
+df_stats_aoi_bavg = da_iri_mask_bavg.aat.compute_raster_stats(
+    gdf=gdf_aoi_dissolved,
+    feature_col=pcode0_col,
+    percentile_list=[100 - perc_area],
 )
-df_stats_aoi_bavg_diff_thresh=da_iri_mask_thresh_diff.aat.compute_raster_stats(
-    gdf=gdf_aoi_dissolved,feature_col=pcode0_col)
-df_stats_aoi_bavg["perc_thresh"] = (df_stats_aoi_bavg_diff_thresh[f"count_{pcode0_col}"]/
- df_stats_aoi_bavg[f"count_{pcode0_col}"]*100)
-df_stats_aoi_bavg["F"]=pd.to_datetime(
-    df_stats_aoi_bavg["F"].apply(lambda x: x.strftime('%Y-%m-%d')))
-df_stats_aoi_bavg["month"]=df_stats_aoi_bavg.F.dt.month
+da_iri_mask_thresh = da_iri_mask_bavg.where(da_iri_mask_bavg >= threshold)
+df_stats_aoi_bavg_thresh = da_iri_mask_thresh.aat.compute_raster_stats(
+    gdf=gdf_aoi_dissolved, feature_col=pcode0_col
+)
+df_stats_aoi_bavg["perc_thresh_bavg"] = (
+    df_stats_aoi_bavg_thresh[f"count_{pcode0_col}"]
+    / df_stats_aoi_bavg[f"count_{pcode0_col}"]
+    * 100
+)
+da_diff_bel_abv = da_iri_mask.sel(C=0) - da_iri_mask.sel(C=2)
+da_iri_mask_thresh_diff = da_iri_mask_bavg.where(
+    (da_iri_mask_bavg >= threshold) & (da_diff_bel_abv >= threshold_diff)
+)
+df_stats_aoi_bavg_diff_thresh = (
+    da_iri_mask_thresh_diff.aat.compute_raster_stats(
+        gdf=gdf_aoi_dissolved, feature_col=pcode0_col
+    )
+)
+df_stats_aoi_bavg["perc_thresh"] = (
+    df_stats_aoi_bavg_diff_thresh[f"count_{pcode0_col}"]
+    / df_stats_aoi_bavg[f"count_{pcode0_col}"]
+    * 100
+)
+df_stats_aoi_bavg["F"] = pd.to_datetime(
+    df_stats_aoi_bavg["F"].apply(lambda x: x.strftime("%Y-%m-%d"))
+)
+df_stats_aoi_bavg["month"] = df_stats_aoi_bavg.F.dt.month
 ```
 
 NaN values indicate that the whole region is covered by a dry mask at that point.
@@ -516,11 +574,15 @@ See [here](https://iri.columbia.edu/our-expertise/climate/forecasts/seasonal-cli
 for more information
 
 ```python
-df_stats_aoi_bavg=df_stats_aoi_bavg[(~df_stats_aoi_bavg.perc_thresh.isnull())]
+df_stats_aoi_bavg = df_stats_aoi_bavg[
+    (~df_stats_aoi_bavg.perc_thresh.isnull())
+]
 ```
 
 ```python
-df_stats_aoi_bavg=df_stats_aoi_bavg.sort_values("perc_thresh",ascending=False)
+df_stats_aoi_bavg = df_stats_aoi_bavg.sort_values(
+    "perc_thresh", ascending=False
+)
 ```
 
 ## Analyze statistics probability below average
@@ -529,65 +591,107 @@ We plot the occurrences of the probability of below average being above
 the given threshold and given minimum percentage of the area.
 
 ```python
-print(f"{round(len(df_stats_aoi_bavg[df_stats_aoi_bavg['perc_thresh_bavg']>=perc_area])/len(df_stats_aoi_bavg)*100)}%"
-      f"({round(len(df_stats_aoi_bavg[df_stats_aoi_bavg['perc_thresh_bavg']>=perc_area]))}/{len(df_stats_aoi_bavg)})"
-      " of forecasts across all seasons and leadtimes"
-      f" predicted >={perc_area}% of the area >={threshold}% prob of below average")
+print(
+    f"{round(len(df_stats_aoi_bavg[df_stats_aoi_bavg['perc_thresh_bavg']>=perc_area])/len(df_stats_aoi_bavg)*100)}%"
+    f"({round(len(df_stats_aoi_bavg[df_stats_aoi_bavg['perc_thresh_bavg']>=perc_area]))}/{len(df_stats_aoi_bavg)})"
+    " of forecasts across all seasons and leadtimes"
+    f" predicted >={perc_area}% of the area >={threshold}% prob of below average"
+)
 ```
 
 ```python
-histo=alt.Chart(df_stats_aoi_bavg).mark_bar().encode(
-    alt.X("perc_thresh_bavg:Q", bin=alt.Bin(step=1),
-          title=f"% of region with >={threshold} probability of bavg"),
-    y='count()',
-).properties(
-    title=[f"Occurence of the percentage of the region with >={threshold}"
-           "probability of bavg",
-                    "Across all seasons and leadtimes",
-                    "Red line indicates the threshold on the % of the area"])
-line = alt.Chart(pd.DataFrame({'x': [perc_area]})).mark_rule(color="red").encode(x='x')
-histo+line
+histo = (
+    alt.Chart(df_stats_aoi_bavg)
+    .mark_bar()
+    .encode(
+        alt.X(
+            "perc_thresh_bavg:Q",
+            bin=alt.Bin(step=1),
+            title=f"% of region with >={threshold} probability of bavg",
+        ),
+        y="count()",
+    )
+    .properties(
+        title=[
+            f"Occurence of the percentage of the region with >={threshold}"
+            "probability of bavg",
+            "Across all seasons and leadtimes",
+            "Red line indicates the threshold on the % of the area",
+        ]
+    )
+)
+line = (
+    alt.Chart(pd.DataFrame({"x": [perc_area]}))
+    .mark_rule(color="red")
+    .encode(x="x")
+)
+histo + line
 ```
 
 ```python
-#select the months and leadtimes included in the trigger
-df_stats_aoi_bavg_trig_mom=df_stats_aoi_bavg[df_stats_aoi_bavg[['month', 'L']].apply(
-    tuple, axis=1).isin(trig_mom)]
+# select the months and leadtimes included in the trigger
+df_stats_aoi_bavg_trig_mom = df_stats_aoi_bavg[
+    df_stats_aoi_bavg[["month", "L"]].apply(tuple, axis=1).isin(trig_mom)
+]
 ```
 
 ```python
-print(f"{round(len(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh_bavg']>=perc_area])/len(df_stats_aoi_bavg_trig_mom)*100)}%"
-      f"({round(len(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh_bavg']>=perc_area]))}/{len(df_stats_aoi_bavg_trig_mom)})"
-      "of forecasts of moments that would be included in the trigger"
-      f" predicted >={perc_area}% of the area >={threshold}% prob of below average")
+print(
+    f"{round(len(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh_bavg']>=perc_area])/len(df_stats_aoi_bavg_trig_mom)*100)}%"
+    f"({round(len(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh_bavg']>=perc_area]))}/{len(df_stats_aoi_bavg_trig_mom)})"
+    "of forecasts of moments that would be included in the trigger"
+    f" predicted >={perc_area}% of the area >={threshold}% prob of below average"
+)
 ```
 
 ```python
-print(f"Moments >={perc_area}% of the area >={threshold}% prob of below average")
-display(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh_bavg']>=perc_area])
+print(
+    f"Moments >={perc_area}% of the area >={threshold}% prob of below average"
+)
+display(
+    df_stats_aoi_bavg_trig_mom[
+        df_stats_aoi_bavg_trig_mom["perc_thresh_bavg"] >= perc_area
+    ]
+)
 ```
 
 ```python
-histo=alt.Chart(df_stats_aoi_bavg_trig_mom).mark_bar().encode(
-    alt.X("perc_thresh_bavg:Q", bin=alt.Bin(step=1),
-          title=f"% of region with >={threshold} probability of bavg"),
-    y='count()',
-).properties(
-    title=[f"Occurence of the percentage of the region"
-           "with >={threshold} probability of bavg",
-                    "For the publication months and leadtimes included in the trigger",
-                    "Red line indicates the threshold on the % of the area"])
-line = alt.Chart(pd.DataFrame({'x': [perc_area]})).mark_rule(color="red").encode(x='x')
-histo+line
+histo = (
+    alt.Chart(df_stats_aoi_bavg_trig_mom)
+    .mark_bar()
+    .encode(
+        alt.X(
+            "perc_thresh_bavg:Q",
+            bin=alt.Bin(step=1),
+            title=f"% of region with >={threshold} probability of bavg",
+        ),
+        y="count()",
+    )
+    .properties(
+        title=[
+            f"Occurence of the percentage of the region"
+            "with >={threshold} probability of bavg",
+            "For the publication months and leadtimes included in the trigger",
+            "Red line indicates the threshold on the % of the area",
+        ]
+    )
+)
+line = (
+    alt.Chart(pd.DataFrame({"x": [perc_area]}))
+    .mark_rule(color="red")
+    .encode(x="x")
+)
+histo + line
 ```
 
 ```python
-df_stats_aoi_bavg_trig_mom["pred_month"]=df_stats_aoi_bavg_trig_mom.apply(
-    lambda x: x["F"]+relativedelta(months=int(x["L"])),axis=1)
+df_stats_aoi_bavg_trig_mom["pred_month"] = df_stats_aoi_bavg_trig_mom.apply(
+    lambda x: x["F"] + relativedelta(months=int(x["L"])), axis=1
+)
 ```
 
 ```python
-df_stats_aoi_bavg_trig_mom.sort_values(["pred_month","L"]).head()
+df_stats_aoi_bavg_trig_mom.sort_values(["pred_month", "L"]).head()
 ```
 
 ### Dominant tercile
@@ -603,35 +707,45 @@ probability below average >= (probability above average + x%)
 We determine this at the pixel level. Based on experiments we set x to 5%
 
 ```python
-ds_iri_mask=da_iri_mask.to_dataset(name="prob")
+ds_iri_mask = da_iri_mask.to_dataset(name="prob")
 ```
 
 ```python
-#cannot get hvplot violin to show up somehow
+# cannot get hvplot violin to show up somehow
 # da_iri_mask_diff=da_iri_mask.sel(C=0)-da_iri_mask.sel(C=2)
 # da_iri_mask_diff.hvplot.violin(
 # 'prob', by='L', color='L', cmap='Category20').opts(ylabel="%bavg - %abv avg")
 ```
 
 ```python
-(da_iri.sel(C=0)-da_iri.sel(C=2)).hvplot.hist(
-    'prob',alpha=0.5,
-    title="difference between below and above average tercile"
+(da_iri.sel(C=0) - da_iri.sel(C=2)).hvplot.hist(
+    "prob",
+    alpha=0.5,
+    title="difference between below and above average tercile",
 )
 ```
 
 ```python
-da_iri.where((da_iri.sel(C=0)-da_iri.sel(C=2)<=5),drop=True).sel(C=0).hvplot.hist(
-    'prob',alpha=0.5,
+da_iri.where((da_iri.sel(C=0) - da_iri.sel(C=2) <= 5), drop=True).sel(
+    C=0
+).hvplot.hist(
+    "prob",
+    alpha=0.5,
     title="below average probability when there"
-          "is less than 5% diff between bel avg and abv avg"
+    "is less than 5% diff between bel avg and abv avg",
 )
 ```
 
 ```python
-print(f"Moments >={perc_area}% of the area >={threshold}% prob of below average"\
-     f"and below average >={threshold_diff} percent points higher than above average.")
-display(df_stats_aoi_bavg_trig_mom[df_stats_aoi_bavg_trig_mom['perc_thresh']>=perc_area])
+print(
+    f"Moments >={perc_area}% of the area >={threshold}% prob of below average"
+    f"and below average >={threshold_diff} percent points higher than above average."
+)
+display(
+    df_stats_aoi_bavg_trig_mom[
+        df_stats_aoi_bavg_trig_mom["perc_thresh"] >= perc_area
+    ]
+)
 ```
 
 ### Conclusion
