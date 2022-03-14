@@ -27,7 +27,8 @@ from dateutil.relativedelta import relativedelta
 from geopandas import GeoDataFrame
 from rasterio.enums import Resampling
 
-from src import constants, utils
+import constants
+import utils
 
 
 def compute_trigger_bfa():
@@ -49,17 +50,18 @@ def compute_trigger_bfa():
     selected.
     """
     gdf_aoi, iri_prob = setup()
-    # TODO: should clobber=True here?
-    iri_prob.download()
-    iri_prob.process()
+    iri_prob.download(clobber=True)
+    iri_prob.process(clobber=True)
     # Load the data that contains the probability per tercile
     # this allows us to solely look at the below-average tercile
     # C indicates the tercile (below-average, normal, or above-average).
     # F indicates the publication month, and L the leadtime
     ds_iri = iri_prob.load()
     ds_iri_mask = approx_mask_raster(ds_iri)
+    # only include the area of interest
     ds_iri_mask = ds_iri_mask.rio.clip(gdf_aoi["geometry"], all_touched=False)
 
+    # compute the statistics on the area
     df_stats_aoi_bavg = compute_stats_iri(
         da=ds_iri_mask.prob,
         gdf_aoi=gdf_aoi,
@@ -208,13 +210,15 @@ def compute_stats_iri(
     df_stats_aoi_bavg_thresh = da_bavg_thresh.aat.compute_raster_stats(
         gdf=gdf_aoi_dissolved, feature_col=pcode0_col
     )
-    # compute perc of region above threshold
+    # compute perc of region above bavg threshold
     df_stats_aoi_bavg["perc_threshold_bavg"] = (
         df_stats_aoi_bavg_thresh[f"count_{pcode0_col}"]
         / df_stats_aoi_bavg[f"count_{pcode0_col}"]
         * 100
     )
 
+    # compute the stats on data that is above the bavg threshold and has more
+    # than `threshold_diff` difference between bavg and abv avg
     if threshold_diff is not None:
         # diff between below average (C=0) and above average (C=2) tercile
         da_diff_bel_abv = da.sel(C=0) - da.sel(C=2)

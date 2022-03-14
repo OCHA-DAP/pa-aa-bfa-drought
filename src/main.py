@@ -1,7 +1,12 @@
 import argparse
 import logging
 
-from aatoolbox import CodAB, GeoBoundingBox, IriForecastDominant
+from aatoolbox import (
+    CodAB,
+    GeoBoundingBox,
+    IriForecastDominant,
+    IriForecastProb,
+)
 
 from src import constants
 
@@ -26,6 +31,13 @@ def run_pipeline(clobber: bool = False):
         constants.country_config, geo_bounding_box=geobb
     )
     iri_dom.download(clobber=clobber)
+    iri_dom.process(clobber=clobber)
+
+    iri_all_terciles = IriForecastProb(
+        constants.country_config, geo_bounding_box=geobb
+    )
+    iri_all_terciles.download(clobber=clobber)
+    iri_all_terciles.process(clobber=clobber)
 
 
 if __name__ == "__main__":

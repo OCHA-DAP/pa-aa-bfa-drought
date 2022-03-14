@@ -473,7 +473,7 @@ da_plt = da_iri_mask_bavg.assign_coords(F=da_iri_mask_bavg.F.dt.month)
 da_plt = da_plt.stack(comb=["F", "L"])
 # only select data that is selected for trigger
 da_iri_mask_trig_mom = xr.concat(
-    [da_plt.sel(comb=m) for m in trig_mom], dim="comb"
+    [da_plt.sel(comb=m) for m in constants.trig_mom], dim="comb"
 )
 ```
 
@@ -623,7 +623,9 @@ histo + line
 ```python
 # select the months and leadtimes included in the trigger
 df_stats_aoi_bavg_trig_mom = df_stats_aoi_bavg[
-    df_stats_aoi_bavg[["month", "L"]].apply(tuple, axis=1).isin(trig_mom)
+    df_stats_aoi_bavg[["month", "L"]]
+    .apply(tuple, axis=1)
+    .isin(constants.trig_mom)
 ]
 ```
 
