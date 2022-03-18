@@ -7,8 +7,12 @@ The trigger is based on IRI's seasonal tercile precipitation forecast.
 The definition of the trigger is:
 1. 40% or more probability of below average rainfall AND
 2. The probability of below average rainfall should be 5 percentage points
-higher than that of above average rainfall on at least 10% of the zone
-(Boucle de Mouhoun, Centre Nord, Sahel, and Nord)
+higher than that of above average rainfall
+
+Both conditions are determined at pixel level. At least 10% of the pixels
+within the zone
+(Boucle de Mouhoun, Centre Nord, Sahel, and Nord) should reach both
+conditions for the trigger to be reached.
 
 This is evaluated in mid-March for the June-August period, i.e. a leadtime
 of 3 months, and in mid-July for the August-October period,

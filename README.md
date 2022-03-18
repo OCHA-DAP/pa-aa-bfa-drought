@@ -57,9 +57,9 @@ and point to it using an environment variable called
 Next create a new virtual environment and install the requirements with:
 
 ```shell
+pip install -r requirements.txt
 pip install --index-url https://test.pypi.org/simple/ \
 --extra-index-url https://pypi.org/simple aa-toolbox==0.4.0.dev9
-pip install -r requirements.txt
 ```
 
 Install `src` as a package so that its contents can be used by the notebooks:

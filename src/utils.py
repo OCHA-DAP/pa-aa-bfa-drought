@@ -15,7 +15,3 @@ def get_month_season_mapping():
         )
         for m in range(1, 13)
     }
-
-
-def get_iri_prob():
-    pass

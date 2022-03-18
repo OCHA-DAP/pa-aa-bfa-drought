@@ -159,7 +159,7 @@ def plt_raster_iri(
     )
     for ax in g.axes.flat:
         gdf_adm1.boundary.plot(linewidth=1, ax=ax, color="grey")
-        gdf_aoi.boundary.plot(linewidth=1, ax=ax, color="red")
+        gdf_aoi.dissolve().boundary.plot(linewidth=1, ax=ax, color="red")
         ax.axis("off")
 
     g.fig.suptitle(
