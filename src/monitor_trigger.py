@@ -139,8 +139,12 @@ def approx_mask_raster(
     ]
     # select from second element of list_dim since can loop over 3D
     # loop over all combs of dims
-    for i in itertools.product(*[ds[d].values for d in list_dim[1:]]):
-        ds_sel = ds.sel({d: i[k] for k, d in enumerate(list_dim[1:])})
+    dim_names = list_dim[1:]
+    for dim_values in itertools.product(*[ds[d].values for d in dim_names]):
+        ds_sel = ds.sel(
+            {name: value for name, value in zip(dim_names, dim_values)}
+        )
+
         ds_sel_upsample = ds_sel.rio.reproject(
             ds_sel.rio.crs,
             resolution=resolution,
@@ -149,7 +153,7 @@ def approx_mask_raster(
         )
         upsample_list.append(
             ds_sel_upsample.expand_dims(
-                {d: [i[k]] for k, d in enumerate(list_dim[1:])}
+                {name: [value] for name, value in zip(dim_names, dim_values)}
             )
         )
     ds_upsample = xr.combine_by_coords(upsample_list)
@@ -196,8 +200,7 @@ def compute_stats_iri(
     """
     # dissolve the region to one polygon
     # i.e. we compute the statistics over the whole region
-    gdf_aoi_dissolved = gdf_aoi.dissolve(by=adm0_col)
-    gdf_aoi_dissolved = gdf_aoi_dissolved[[pcode0_col, "geometry"]]
+    gdf_aoi_dissolved = gdf_aoi.dissolve(by=adm0_col)[[pcode0_col, "geometry"]]
 
     # sel below average tercile
     da_bavg = da.sel(C=0)
@@ -212,7 +215,7 @@ def compute_stats_iri(
     # compute the stats on data above threshold
     da_bavg_thresh = da_bavg.where(da_bavg >= threshold_bavg)
     df_stats_aoi_bavg_thresh = da_bavg_thresh.aat.compute_raster_stats(
-        gdf=gdf_aoi_dissolved, feature_col=pcode0_col
+        gdf=gdf_aoi_dissolved, feature_col=pcode0_col, stats_list=["count"]
     )
     # compute perc of region above bavg threshold
     df_stats_aoi_bavg["perc_threshold_bavg"] = (
@@ -232,7 +235,9 @@ def compute_stats_iri(
         )
         df_stats_aoi_bavg_diff_thresh = (
             da_threshold_diff.aat.compute_raster_stats(
-                gdf=gdf_aoi_dissolved, feature_col=pcode0_col
+                gdf=gdf_aoi_dissolved,
+                feature_col=pcode0_col,
+                stats_list=["count"],
             )
         )
         # perc of area meeting both thresholds

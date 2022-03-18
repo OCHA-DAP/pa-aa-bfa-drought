@@ -480,7 +480,7 @@ da_iri_mask_trig_mom = xr.concat(
 ```python
 da_iri_mask_trig_mom.hvplot.box("prob").opts(
     ylabel="Probability below average",
-    title="observed probabilities of bavg for the month and leadtime"
+    title="observed probabilities of bavg for the month and leadtime "
     "combinations \n included in the triger",
 )
 ```
@@ -534,7 +534,7 @@ df_stats_aoi_bavg = da_iri_mask_bavg.aat.compute_raster_stats(
 )
 da_iri_mask_thresh = da_iri_mask_bavg.where(da_iri_mask_bavg >= threshold)
 df_stats_aoi_bavg_thresh = da_iri_mask_thresh.aat.compute_raster_stats(
-    gdf=gdf_aoi_dissolved, feature_col=pcode0_col
+    gdf=gdf_aoi_dissolved, feature_col=pcode0_col, stats_list=["count"]
 )
 df_stats_aoi_bavg["perc_thresh_bavg"] = (
     df_stats_aoi_bavg_thresh[f"count_{pcode0_col}"]
@@ -547,7 +547,7 @@ da_iri_mask_thresh_diff = da_iri_mask_bavg.where(
 )
 df_stats_aoi_bavg_diff_thresh = (
     da_iri_mask_thresh_diff.aat.compute_raster_stats(
-        gdf=gdf_aoi_dissolved, feature_col=pcode0_col
+        gdf=gdf_aoi_dissolved, feature_col=pcode0_col, stats_list=["count"]
     )
 )
 df_stats_aoi_bavg["perc_thresh"] = (
