@@ -102,9 +102,14 @@ We load the iri data indicating the dominant tercile.
 The negative values indicate forecasted below average rainfall,
 and the positive values above average. We use rounded bins (e.g. -40 to 40).
 The IRI website bins are slightly different,
-where values between -37.5 and 37.5 are assigned to the normal tercile.
+where values between -37.5 and 37.5 are assigned to the normal tercile. We chose
+to use the rounded bins here as will be later explained we set the threshold at
+40% and thus it makes it easier to read if the threshold is met.
 
 We plot the forecast raster data for the periods and leadtimes of interest.
+The forecasts are published mid-month, a leadtime of 1 means it is covering the
+period starting the next month. E.g. forecast published in February with 1 month
+leadtime covers March-April-May.
 The red areas are the admin1's we are focussing on.
 These figures are the same as
 [the figure on the IRI Maproom](https://iridl.ldeo.columbia.edu/maproom/Global/Forecasts/NMME_Seasonal_Forecasts/Precipitation_ELR.html)
@@ -285,6 +290,10 @@ all cells touching the region, and an approximate mask.
 
 After discussion we concluded that the approximate
 mask is a valid method and thus use this further on.
+
+This approximate mask is created by dividing the original resolution cells in
+squares of 0.05 degrees while keeping their original value (so no interpolation).
+Then all 0.05 cells with their centre within the zone are selected.
 
 ```python
 # sel random values to enable easy plotting of included cells (so values are irrelevant)
@@ -495,8 +504,8 @@ We have to set two parameters: the minimum probability of below average,
 and the method of aggregation.
 
 Based on the above plots we set the minimum probability of below average to 40%.
-We have limited data to base this on but the reasoning is
-that 40% is relatively rare while not unreachable.
+We only have data since 2017, and thus have limited data to base this on but
+the reasoning is that 40% is relatively rare while not unreachable.
 
 How rare it is, also depends on how the cells within the region of interest are aggregated.
 We chose to look at the percentage of cells reaching the threshold.
