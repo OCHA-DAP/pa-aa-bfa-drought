@@ -1,7 +1,9 @@
 # Evaluate trigger status during 2022 season
 
 During 2022 the trigger was not reached. As evaluation the country team asked
-to provide some figures which are computed here
+to provide some figures which are computed here. They were then added to
+[this presentation](https://docs.google.com/presentation/d/1DSFSVfV4JCnB43vQP155omYS2cf082nHmk3O38WBYWg/edit?usp=sharing)
+which was shared with the wider team.
 
 The trigger is evaluated at two points in time:
 
@@ -15,7 +17,8 @@ precipitation in the August, September, and October
 period, funds are released for the implementation of activities by the
 food security and livelihoods sector.
 
-The trigger is defined as:
+The trigger makes use of IRI's seasonal tercile precipitation forecast and
+is defined as:
 
 1. 40% or more probability of below average rainfall AND
 2. The probability of below average rainfall should be 5 percentage points
@@ -165,6 +168,14 @@ def plt_single_date_leadtime(da_single):
     )
 ```
 
+Note that for the
+[presentation](https://docs.google.com/presentation/d/1DSFSVfV4JCnB43vQP155omYS2cf082nHmk3O38WBYWg/edit?usp=sharing)
+the legend from IRI's website was added instead of this one as it more clearly
+shows what the numbers mean. Be aware that
+[IRI's website legend](https://iri.columbia.edu/our-expertise/climate/forecasts/seasonal-climate-forecasts/)
+shows normal values to be grey whereas they are in our graphics
+(and actually also in IRI's) white.
+
 ```python
 da_mar_2022 = da_iri_dom_clip.sel(
     F=cftime.Datetime360Day(2022, 3, 16, 0, 0, 0, 0), L=3
@@ -183,7 +194,7 @@ plt_single_date_leadtime(da_mar_2022)
 
 Before we looked at the dominant tercile.
 From here on we use a dataset that contains the probability per tercile,
-such that we can the range of values of the below average tercile,
+such that we can compute the range of values of the below average tercile,
 regardless of the values of the other terciles.
 
 We load the data and apply an approximate mask to our region of interest.
