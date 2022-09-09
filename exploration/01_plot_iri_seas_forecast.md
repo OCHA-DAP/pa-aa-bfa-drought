@@ -112,9 +112,11 @@ da_date.where(da_date >= 40).plot(
 gdf_adm1.boundary.plot(linewidth=1, ax=g.axes, color="grey")
 gdf_aoi.dissolve().boundary.plot(linewidth=1, ax=g.axes, color="red")
 g.axes.axis("off")
-g.axes.set_title((
-    f"Forecast published in {pub_date.strftime('%b %Y')} \n"
-    "Predicting {for_seas} (lt={leadtime} months)")
+g.axes.set_title(
+    (
+        f"Forecast published in {pub_date.strftime('%b %Y')} \n"
+        "Predicting {for_seas} (lt={leadtime} months)"
+    )
 );
 ```
 
@@ -179,9 +181,11 @@ g = da_date.sel(C=0).plot(
 gdf_adm1.boundary.plot(linewidth=1, ax=g.axes, color="grey")
 gdf_aoi.dissolve().boundary.plot(linewidth=1, ax=g.axes, color="red")
 g.axes.axis("off")
-g.axes.set_title((
-    f"Forecast published in {pub_date.strftime('%b %Y')} \n"
-    "Predicting {for_seas} (lt={leadtime} months)")
+g.axes.set_title(
+    (
+        f"Forecast published in {pub_date.strftime('%b %Y')} \n"
+        "Predicting {for_seas} (lt={leadtime} months)"
+    )
 )
 cmap = g.get_cmap()
 cmap.set_over("#543005")

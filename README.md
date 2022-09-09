@@ -15,6 +15,16 @@ namely Boucle du Mouhoun, Nord, Centre-Nord, and Sahel.
 
 ## Overview of analysis
 
+This repository currently only contains analysis of IRI data in `analyses` and code
+to download this data and monitor the trigger in `src`.
+
+More analyses were done, but these are in the [old repository](https://github.com/OCHA-DAP/pa-anticipatory-action/tree/develop/analyses/bfa)
+and should be ported over in the future.
+
+The explanation below on analyses and data sources is copied from the old
+repository. The text under `reproducing this analysis` is specific for the repository
+you are currently looking at.
+
 We first explored data on humanitarian risk and vulnerabilities to help define
 the geographic scope and shock for the pilot.
 This exploration is summarized in
@@ -40,21 +50,16 @@ This data is publicly available and is updated every month.
 We also make use of the administrative boundaries from the
 Common Operational Datasets (CODs) on HDX.
 
-### TO be added
-
-- Where does the data come from? Are there any licensing or usage restrictions?
-- How can the data be accessed?
-- Why were these datasets selected?
-- Are there any limitations with these datasets that one should be aware
-    of when running the analysis and interpreting results?
-
 ## Reproducing this analysis
 
 Create a directory where you would like the data to be stored,
 and point to it using an environment variable called
 `AA_DATA_DIR`.
 
-Next create a new virtual environment and install the requirements with:
+Next create a new virtual environment and install the requirements with the
+commands below.
+Note that it is currently using a dev version of the toolbox,
+but this should be updated in the future
 
 ```shell
 pip install -r requirements.txt
@@ -88,7 +93,7 @@ If you would like to instead receive the processed data from our team, please
 To monitor the trigger, run:
 
 ```shell
-python src/monitor.py
+python src/monitor_trigger.py
 ```
 
 ## Development
