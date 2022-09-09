@@ -85,8 +85,7 @@ To see runtime options, execute:
 python src/main.py -h
 ```
 
-If you would like to instead receive the processed data from our team, please
-[contact us](mailto:centrehumdata@un.org).
+To enable downloading of IRI data you need to create an account. See instructions [here](https://aa-toolbox.readthedocs.io/en/latest/datasources/iri_seasonal_forecast.html#usage) on how to do that. 
 
 ### Monitoring
 
