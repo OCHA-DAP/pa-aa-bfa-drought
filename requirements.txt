@@ -1,3 +1,4 @@
+aa-toolbox==0.4.2
 altair==4.2.0
 bokeh==2.4.1
 geopandas==0.10.2
