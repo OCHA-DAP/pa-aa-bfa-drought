@@ -254,7 +254,7 @@ def compute_stats_iri(
     df_stats_aoi_bavg["pub_month"] = df_stats_aoi_bavg.F.dt.month
     df_stats_aoi_bavg["pred_seas"] = df_stats_aoi_bavg.apply(
         lambda x: utils.get_month_season_mapping()[
-            int((x["F"] + relativedelta(months=int(x["L"]))).strftime("%-m"))
+            int((x["F"] + relativedelta(months=int(x["L"]))).month)
         ],
         axis=1,
     )
