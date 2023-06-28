@@ -22,9 +22,6 @@ from ochanticipy import (
     create_country_config,
     CodAB,
     GeoBoundingBox,
-    ChirpsMonthly,
-    IriForecastDominant,
-    IriForecastProb,
 )
 from dotenv import load_dotenv
 import datetime
@@ -34,6 +31,7 @@ import pandas as pd
 import rioxarray
 import matplotlib.pyplot as plt
 import xarray as xr
+import rasterio
 ```
 
 ```python
@@ -43,49 +41,31 @@ load_dotenv()
 country_config = create_country_config(iso3="bfa")
 codab = CodAB(country_config=country_config)
 # codab.download()
-gdf_adm2 = codab.load(admin_level=2)
-geobb = GeoBoundingBox.from_shape(gdf_adm2)
-gdf_aoi = gdf_adm2.loc[gdf_adm2.ADM1_FR.isin(adm1_sel)]
+gdf_adm1 = codab.load(admin_level=1)
+geobb = GeoBoundingBox.from_shape(gdf_adm1)
+gdf_aoi = gdf_adm1.loc[gdf_adm1.ADM1_FR.isin(adm1_sel)]
 
 RAW_DIR = Path(os.environ["AA_DATA_DIR"]) / "public/raw/bfa"
-WFP_FILE_PATH = RAW_DIR / "chirps/bfa-rainfall-adm2-full.csv"
+CMORPH_DIR = Path(os.environ["CMORPH_DIR"])
 ```
 
 ```python
-# download most recent
-start_date = datetime.date(2020, 1, 1)
-new_chirps_monthly = ChirpsMonthly(
-    country_config=country_config,
-    geo_bounding_box=geobb,
-    start_date=start_date,
-)
-new_chirps_monthly.download()
+# read CMORPH data
+
+start_date = datetime.date(2020, 5, 1)
+end_date = datetime.date(2020, 8, 1)
+dates = pd.date_range(start_date, end_date, freq="M")
+
+ds = xr.open_mfdataset(os.path.join(CMORPH_DIR, "*.nc"))
+ds.coords["lon"] = (ds.coords["lon"] + 180) % 360 - 180
+ds = ds.sortby(ds.lon)
+ds = ds.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
+ds.rio.write_crs("EPSG:3857", inplace=True)
+ds = ds.rio.clip(gdf_aoi["geometry"], all_touched=True)
 ```
 
 ```python
-start_date = datetime.date(2007, 11, 1)
-end_date = datetime.date(2021, 1, 1)
-chirps_monthly = ChirpsMonthly(
-    country_config=country_config,
-    geo_bounding_box=geobb,
-    start_date=start_date,
-    end_date=end_date,
-)
-chirps_monthly.process()
-chirps_monthly_data = chirps_monthly.load()
-```
-
-```python
-df = pd.read_csv(WFP_FILE_PATH, skiprows=[1])
-```
-
-```python
-fn = "/Users/tdowning/OCHA/data/bfa/iri_spi_africa.nc"
-xr = rioxarray.open_rasterio(fn, decode_times=False)
-```
-
-```python
-xr[1, :, :].plot()
+ds["spi_gamma_30_day"][0, :, :].plot()
 ```
 
 ```python
