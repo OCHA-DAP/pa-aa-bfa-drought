@@ -100,6 +100,7 @@ for date in dates:
         continue
     dss.append(ds)
 
+print(dss)
 ds = xr.merge(dss)
 df = ds.to_dataframe().reset_index().drop(columns=["spatial_ref"])
 ```
