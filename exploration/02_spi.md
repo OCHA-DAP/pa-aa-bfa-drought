@@ -28,6 +28,7 @@ import datetime
 import os
 from pathlib import Path
 import pandas as pd
+import numpy as np
 import rioxarray
 import matplotlib.pyplot as plt
 import xarray as xr
@@ -37,6 +38,8 @@ import plotly.offline as pyo
 import plotly.express as px
 from plotly.subplots import make_subplots
 from colour import Color
+import netCDF4
+import time
 
 pyo.init_notebook_mode()
 ```
@@ -75,18 +78,25 @@ df = ds.to_dataframe().reset_index().drop(columns=["spatial_ref"])
 ```python
 # read CMORPH data one by one
 
-start_date = datetime.date(2020, 5, 1)
-end_date = datetime.date(2023, 1, 1)
-dates = pd.date_range(start_date, end_date, freq="W")
+start_date = datetime.date(1998, 7, 1)
+# end_date = datetime.date(2023, 1, 1)
+end_date = datetime.date(2019, 9, 1)
+dates = pd.date_range(start_date, end_date, freq="M").to_series()
+dates = dates[dates.dt.month.isin([7, 8, 9])]
 
 dss = []
 
 for date in dates:
-    print(date)
-    path = CMORPH_DIR / f"daily/cmorph_spi_gamma_30_day_{date:%Y-%m-%d}.nc"
+    #     print(date)
+    path = (
+        CMORPH_DIR
+        / f"processed/cmorph_spi_gamma_30_day_{date:%Y-%m-%d}_bfa.nc"
+    )
+    #     path = CMORPH_DIR / f"daily/cmorph_spi_gamma_30_day_{date:%Y-%m-%d}.nc"
     try:
         ds = xr.open_dataset(path)
     except FileNotFoundError as error:
+        print(f"couldn't read {date}")
         print(error)
         continue
     ds.coords["lon"] = (ds.coords["lon"] + 180) % 360 - 180
@@ -100,9 +110,99 @@ for date in dates:
         continue
     dss.append(ds)
 
-print(dss)
-ds = xr.merge(dss)
+ds = xr.concat(dss, dim="time")
 df = ds.to_dataframe().reset_index().drop(columns=["spatial_ref"])
+```
+
+```python
+# read and process historical CMORPH file (roughly 8 seconds per saved file)
+
+filename = CMORPH_DIR / "cmorph_spi_gamma_30_day.nc"
+
+ds_hist = xr.open_dataarray(filename)
+ds_hist.coords["lon"] = (ds_hist.coords["lon"] + 180) % 360 - 180
+ds_hist = ds_hist.sortby(ds_hist.lon)
+ds_hist = ds_hist.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
+ds_hist.rio.write_crs("EPSG:4326", inplace=True)
+
+
+start_date = pd.to_datetime(ds_hist["time"])[0]
+end_date = pd.to_datetime(ds_hist["time"])[-1]
+dates = pd.date_range(start_date, end_date, freq="M").to_series()
+dates = dates[dates.dt.month.isin([7, 8, 9])]
+print(dates)
+
+
+for date in dates:
+    print(f"{date:%Y-%m-%d}")
+    ds = ds_hist.loc[date, :, :]
+    ds = ds.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
+    ds = ds.rio.clip(gdf_aoi["geometry"], all_touched=True)
+    ds.to_netcdf(
+        CMORPH_DIR
+        / f"processed/cmorph_spi_gamma_30_day_{date:%Y-%m-%d}_bfa.nc",
+        engine="h5netcdf",
+    )
+```
+
+```python
+# process recent CMORPH files
+
+start_date = datetime.date(2020, 5, 1)
+end_date = datetime.date(2023, 3, 1)
+dates = pd.date_range(start_date, end_date, freq="M").to_series()
+dates = dates[dates.dt.month.isin([7, 8, 9])]
+
+for date in dates:
+    print(date)
+    path = CMORPH_DIR / f"daily/cmorph_spi_gamma_30_day_{date:%Y-%m-%d}.nc"
+    try:
+        ds = xr.open_dataset(path)
+    except FileNotFoundError as error:
+        print(f"couldn't read {date}")
+        print(error)
+        continue
+    ds.coords["lon"] = (ds.coords["lon"] + 180) % 360 - 180
+    ds = ds.sortby(ds.lon)
+    ds = ds.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
+    ds.rio.write_crs("EPSG:4326", inplace=True)
+    ds = ds.rio.clip(gdf_aoi["geometry"], all_touched=True)
+    ds.to_netcdf(
+        CMORPH_DIR
+        / f"processed/cmorph_spi_gamma_30_day_{date:%Y-%m-%d}_bfa.nc",
+        engine="h5netcdf",
+    )
+```
+
+```python
+# read processed (bfa clip)
+
+# drop dates with erroneous measurement
+DROP_DATES = ["2021-09-30"]
+
+start_date = datetime.date(1998, 7, 1)
+end_date = datetime.date(2023, 3, 1)
+dates = pd.date_range(start_date, end_date, freq="M").to_series()
+dates = dates[dates.dt.month.isin([7, 8, 9])]
+dates = dates.drop(DROP_DATES)
+
+dss = []
+
+for date in dates:
+    path = (
+        CMORPH_DIR
+        / f"processed/cmorph_spi_gamma_30_day_{date:%Y-%m-%d}_bfa.nc"
+    )
+    try:
+        ds = xr.open_dataset(path)
+    except FileNotFoundError as error:
+        print(f"couldn't read {date}")
+        continue
+
+    dss.append(ds)
+
+da = xr.concat(dss, dim="time")["spi_gamma_30_day"]
+df = da.to_dataframe().reset_index()
 ```
 
 ```python
@@ -142,6 +242,8 @@ drop_dates = pd.concat(
         ]["time"],
     ]
 )
+
+print(drop_dates)
 
 df_agg = df_agg[~df_agg["time"].isin(drop_dates)]
 ```
@@ -225,15 +327,19 @@ pyo.iplot(fig)
 ```
 
 ```python
-spi_thesholds = [-3, -2.5, -2, -1.5, -1, -0.5]
-percent_thresholds = [0.1, 0.2, 0.3]
+# determine historical triggers
+
+spi_thesholds = np.round(np.arange(-2, -0.75 + 0.01, 0.25), 2)
+percent_thresholds = np.round(np.arange(0.05, 0.3 + 0.01, 0.05), 2)
 
 dff = df[
     (df["time"].dt.month.isin(months_of_interest))
     & ~(df["time"].isin(drop_dates))
 ]
 
-df_recur = pd.DataFrame()
+years = df["time"].dt.year.unique()
+
+df_events = pd.DataFrame()
 
 for spi_t in spi_thesholds:
     for per_t in percent_thresholds:
@@ -250,36 +356,130 @@ for spi_t in spi_thesholds:
                         [[date, frac, spi_t, per_t]],
                         columns=["date", "frac", "spi_t", "per_t"],
                     )
-                    df_recur = pd.concat([df_recur, df_count])
+                    df_events = pd.concat([df_events, df_count])
+
+print(df_events)
+```
+
+```python
+pd.options.mode.chained_assignment = None
 
 
-df_recur["year"] = df_recur["date"].dt.year
-df_recur = df_recur.groupby(["year", "spi_t", "per_t"]).count().reset_index()
+def years_to_string(cell):
+    if isinstance(cell, float):
+        return "None"
+    else:
+        return "<br>".join(map(str, cell))
 
-# print(df_recur)
 
-df_recur = df_recur.pivot_table(
-    index="spi_t",
-    columns="per_t",
-    values="frac",
-    aggfunc="count",
+month_ranges = [[7], [8], [9], [7, 8, 9]]
+month_range_names = ["July", "August", "September", "ANY MONTH"]
+range_color = [1, 5]
+
+for month_range, month_range_name in zip(month_ranges, month_range_names):
+    dff = df_events[df_events["date"].dt.month.isin(month_range)]
+    dff["year"] = dff["date"].dt.year
+    dff = (
+        dff.groupby(["year", "spi_t", "per_t"])["date"]
+        .apply(list)
+        .reset_index()
+    )
+    df_freq = dff.pivot_table(
+        index="spi_t",
+        columns="per_t",
+        values="date",
+        aggfunc="count",
+    )
+
+    df_freq = len(years) / df_freq
+    df_freq = df_freq.fillna("inf")
+    df_freq = df_freq.astype(float).round(1)
+
+    df_freq.columns = df_freq.columns.astype(str)
+    df_freq = df_freq.reindex(sorted(df_freq.columns, reverse=True), axis=1)
+    df_freq.index = df_freq.index.astype(str)
+
+    df_records = dff.pivot_table(
+        index="spi_t",
+        columns="per_t",
+        values="year",
+        aggfunc=lambda x: list(x),
+    )
+
+    df_records = df_records.applymap(years_to_string)
+    df_records.columns = df_records.columns.astype(str)
+    df_records = df_records.reindex(
+        sorted(df_freq.columns, reverse=True), axis=1
+    )
+    df_records.index = df_records.index.astype(str)
+
+    fig = px.imshow(df_freq, text_auto=True, range_color=range_color)
+    fig.update(
+        data=[
+            {
+                "customdata": df_records,
+                "hovertemplate": "Years activated:<br>%{customdata}",
+            }
+        ]
+    )
+    fig.update_traces(name="")
+    fig.update_layout(
+        coloraxis_colorbar_title="Recurrence (years)",
+        template="simple_white",
+        coloraxis_colorbar_outlinewidth=0,
+        coloraxis_colorbar_tickvals=range_color,
+        title=month_range_name,
+    )
+    fig.update_xaxes(
+        side="top",
+        title_text="Percent of AOI Threshold",
+        mirror=True,
+        showline=False,
+    )
+    fig.update_yaxes(
+        title="SPI Threshold",
+        mirror=True,
+        showline=False,
+        fixedrange=True,
+    )
+
+    pyo.iplot(fig)
+```
+
+```python
+# plot SPI for specific time
+
+date = datetime.datetime(2019, 8, 31)
+
+fig, ax = plt.subplots()
+ax.axis("off")
+ax.set_title(f"Date: {date:%Y-%m-%d}")
+
+gdf_aoi.boundary.plot(linewidth=1, ax=ax, color="grey")
+da.sel(time=date).plot(ax=ax, cmap="Reds_r", vmin=-2, vmax=0)
+```
+
+```python
+# SPI animation
+
+range_color = [-2, 0]
+fig = px.imshow(
+    da,
+    animation_frame="time",
+    origin="lower",
+    range_color=range_color,
+    color_continuous_scale="Reds_r",
 )
+fig.update_layout(template="simple_white")
+fig.update_xaxes(visible=False)
+fig.update_yaxes(visible=False)
 
-df_recur = len(years) / df_recur
-df_recur = df_recur.fillna("inf")
 
-df_recur.columns = df_recur.columns.astype(str)
-df_recur = df_recur.reindex(sorted(df_recur.columns, reverse=True), axis=1)
-df_recur.index = df_recur.index.astype(str)
+pyo.iplot(fig, auto_play=False)
+```
 
-print(df_recur)
-
-fig = px.imshow(df_recur, text_auto=True)
-fig.update_layout(coloraxis_colorbar_title="Recurrence (years)")
-fig.update_xaxes(side="top", title_text="Percent of AOI Threshold")
-fig.update_yaxes(title="SPI Threshold")
-
-pyo.iplot(fig)
+```python
+print(da)
 ```
 
 ```python
