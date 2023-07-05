@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.14.6
+      jupytext_version: 1.13.7
   kernelspec:
     display_name: venv
     language: python
@@ -413,7 +413,12 @@ for month_range, month_range_name in zip(month_ranges, month_range_names):
     )
     df_records.index = df_records.index.astype(str)
 
-    fig = px.imshow(df_freq, text_auto=True, range_color=range_color)
+    fig = px.imshow(
+        df_freq,
+        text_auto=True,
+        range_color=range_color,
+        color_continuous_scale="Reds",
+    )
     fig.update(
         data=[
             {
