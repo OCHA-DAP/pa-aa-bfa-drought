@@ -7,7 +7,8 @@ import datetime
 load_dotenv()
 
 WRSI_RAW_DIR = Path(os.environ["WRSI_RAW_DIR"])
-
+DATA_DIR = Path(os.environ["AA_DATA_DIR"])
+WRSI_EXTRACT_DIR = DATA_DIR / "public/raw/bfa/fewsnet/wrsi"
 
 dekads = range(13, 34)
 years = range(1, 23)
@@ -21,7 +22,7 @@ for year in years:
         filename = f"w{year:02d}{dekad:02d}wa.zip"
         extract_folder = filename.removesuffix(".zip")
         zip_path = WRSI_RAW_DIR / filename
-        extract_path = WRSI_RAW_DIR / extract_folder
+        extract_path = WRSI_EXTRACT_DIR / extract_folder
         print(filename)
         try:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
