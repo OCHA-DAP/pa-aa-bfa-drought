@@ -36,6 +36,7 @@ import pandas as pd
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
+from rasterio.crs import CRS
 
 pyo.init_notebook_mode()
 ```
@@ -56,6 +57,7 @@ WRSI_DIR = RAW_DIR / "fewsnet/wrsi"
 ```
 
 ```python
+# read unzipped geotiffs
 # wa is croplands, w1 is rangelands
 
 start_date = datetime.date(2001, 1, 1)
@@ -80,6 +82,13 @@ for date in dates:
     except Exception as error:
         print(f"couldn't open for {eff_date}")
         continue
+    da = da.drop_duplicates(dim="x", keep="first")
+    da.rio.write_crs(
+        CRS.from_proj4(
+            "+proj=aea +lat_1=-19.0 +lat_2=21.0 +lat_0=1.0 "
+            "+lon_0=20 +x_0=0 +y_0=0 +ellps=clrk66 +units=m +no_defs"
+        )
+    )
     da = da.rio.reproject("EPSG:4326")
     da = da.rio.clip(gdf_aoi["geometry"], all_touched=True)
     da = da.expand_dims(time=[eff_date])
@@ -92,6 +101,10 @@ df = df.drop(columns=["spatial_ref", "band"])
 df = df.dropna()
 
 print(df)
+```
+
+```python
+da
 ```
 
 ```python
@@ -243,22 +256,11 @@ for month_range, month_range_name in zip(month_ranges, month_range_names):
 ```
 
 ```python
-date = datetime.datetime(2019, 8, 31)
-
-fig, ax = plt.subplots()
-ax.axis("off")
-ax.set_title(f"Date: {date:%Y-%m-%d}")
-
-gdf_aoi.boundary.plot(linewidth=1, ax=ax, color="grey")
-da.sel(time=date).plot(ax=ax, cmap="Reds_r", vmin=-2, vmax=0)
-```
-
-```python
 # WRSI animation
 
 # range_color = [-2, 0]
 fig = px.imshow(
-    da.where(da != 0 & da != np.nan),
+    da.where(da != 0),
     animation_frame="time",
     origin="lower",
     #     range_color=range_color,

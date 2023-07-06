@@ -323,11 +323,12 @@ for index, year in enumerate(years):
             col=col,
         )
 
+fig.update_layout(height=3000)
 pyo.iplot(fig)
 ```
 
 ```python
-# determine historical triggers
+# determine historical triggers based on single threshold
 
 spi_thesholds = np.round(np.arange(-2, -0.75 + 0.01, 0.25), 2)
 percent_thresholds = np.round(np.arange(0.05, 0.3 + 0.01, 0.05), 2)
@@ -452,9 +453,136 @@ for month_range, month_range_name in zip(month_ranges, month_range_names):
 ```
 
 ```python
+# determine historical triggers with different thresholds for different months
+
+aois = [
+    [0.2, 0.15, 0.15],
+    [0.2, 0.2, 0.15],
+    [0.15, 0.15, 0.15],
+    [0.2, 0.2, 0.2],
+]
+
+years = df["time"].dt.year.unique()
+
+df_events = pd.DataFrame()
+
+for spi_t in [-1, -1.25, -1.5]:
+    for aoi_t in aois:
+        month2thresholds = {
+            7: {"spi": spi_t, "aoi": aoi_t[0]},
+            8: {"spi": spi_t, "aoi": aoi_t[1]},
+            9: {"spi": spi_t, "aoi": aoi_t[2]},
+        }
+        df_events_t = pd.DataFrame()
+        for year in years:
+            for month in month2thresholds.keys():
+                dff = pd.DataFrame()
+                dff = df[
+                    (df["time"].dt.year == year)
+                    & (df["time"].dt.month == month)
+                ].dropna()
+                if dff.empty:
+                    continue
+                date = dff["time"].iloc[-1]
+                frac = len(
+                    dff[
+                        dff["spi_gamma_30_day"]
+                        < month2thresholds.get(month).get("spi")
+                    ]
+                ) / len(dff)
+                aoi_str = ", ".join([str(x) for x in aoi_t])
+                if frac > month2thresholds.get(month).get("aoi"):
+                    df_count = pd.DataFrame(
+                        [[date, frac, spi_t, aoi_str]],
+                        columns=["date", "frac", "spi_t", "per_t"],
+                    )
+                    df_events = pd.concat([df_events, df_count])
+                    df_events_t = pd.concat([df_events_t, df_count])
+
+        years_triggered = df_events_t["date"].dt.year.unique()
+        return_period = len(years) / len(years_triggered)
+        print(
+            f"with SPI {spi_t} and AOI {aoi_str}: triggered {len(years_triggered)} out of {len(years)} (return period {return_period:.3} years)"
+        )
+        print(years_triggered)
+        print()
+```
+
+```python
+dff = df_events.copy()
+dff["year"] = dff["date"].dt.year
+dff = dff.groupby(["year", "spi_t", "per_t"])["date"].apply(list).reset_index()
+df_freq = dff.pivot_table(
+    index="spi_t",
+    columns="per_t",
+    values="date",
+    aggfunc="count",
+)
+
+df_freq = len(years) / df_freq
+df_freq = df_freq.fillna("inf")
+df_freq = df_freq.astype(float).round(1)
+
+print(df_freq)
+
+df_freq.columns = df_freq.columns.astype(str)
+df_freq = df_freq.reindex(sorted(df_freq.columns, reverse=True), axis=1)
+df_freq.index = df_freq.index.astype(str)
+
+df_records = dff.pivot_table(
+    index="spi_t",
+    columns="per_t",
+    values="year",
+    aggfunc=lambda x: list(x),
+)
+
+df_records = df_records.applymap(years_to_string)
+df_records.columns = df_records.columns.astype(str)
+df_records = df_records.reindex(sorted(df_freq.columns, reverse=True), axis=1)
+df_records.index = df_records.index.astype(str)
+
+range_color = [1, 5]
+fig = px.imshow(
+    df_freq,
+    text_auto=True,
+    range_color=range_color,
+    color_continuous_scale="Reds",
+)
+fig.update(
+    data=[
+        {
+            "customdata": df_records,
+            "hovertemplate": "Years activated:<br>%{customdata}",
+        }
+    ]
+)
+fig.update_traces(name="")
+fig.update_layout(
+    coloraxis_colorbar_title="Recurrence (years)",
+    template="simple_white",
+    coloraxis_colorbar_outlinewidth=0,
+    coloraxis_colorbar_tickvals=range_color,
+)
+fig.update_xaxes(
+    side="top",
+    title_text="AOI thresholds [Jul, Aug, Sep]",
+    mirror=True,
+    showline=False,
+)
+fig.update_yaxes(
+    title="SPI Threshold",
+    mirror=True,
+    showline=False,
+    fixedrange=True,
+)
+
+pyo.iplot(fig)
+```
+
+```python
 # plot SPI for specific time
 
-date = datetime.datetime(2019, 8, 31)
+date = datetime.datetime(2000, 9, 30)
 
 fig, ax = plt.subplots()
 ax.axis("off")
