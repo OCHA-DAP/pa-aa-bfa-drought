@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.14.6
+      jupytext_version: 1.13.7
   kernelspec:
     display_name: venv
     language: python
@@ -35,6 +35,9 @@ from colour import Color
 import pandas as pd
 import xarray as xr
 import numpy as np
+import matplotlib.pyplot as plt
+
+pyo.init_notebook_mode()
 ```
 
 ```python
@@ -55,7 +58,7 @@ WRSI_DIR = RAW_DIR / "fewsnet/wrsi"
 ```python
 # wa is croplands, w1 is rangelands
 
-start_date = datetime.date(2023, 5, 1)
+start_date = datetime.date(2001, 1, 1)
 end_date = datetime.date(2023, 7, 1)
 dates = pd.date_range(start_date, end_date, freq="10D")
 
@@ -68,13 +71,14 @@ for date in dates:
     eff_date = datetime.datetime(date.year, 1, 1) + datetime.timedelta(
         dayofyear - 1
     )
-    print(eff_date)
-    zip_filename = "zip+file://" / WRSI_DIR / "w2317wa.zip!/w2317dd.tif"
-    filename = WRSI_DIR / f"w{year}{dekad}wa/w{year}{dekad}dd.tif"
+    filename = (
+        WRSI_DIR / f"w{year:02d}{dekad:02d}wa/w{year:02d}{dekad:02d}dd.tif"
+    )
     try:
         da = rxr.open_rasterio(filename)
+        print(f"opened for {eff_date}")
     except Exception as error:
-        print(error)
+        print(f"couldn't open for {eff_date}")
         continue
     da = da.rio.reproject("EPSG:4326")
     da = da.rio.clip(gdf_aoi["geometry"], all_touched=True)
@@ -110,18 +114,21 @@ print(df_agg)
 ```
 
 ```python
+# look for triggers
+
 wrsi_thesholds = np.round(np.arange(95, 100 + 0.01, 1), 2)
 percent_thresholds = np.round(np.arange(0.05, 0.3 + 0.01, 0.05), 2)
 
 years = df["time"].dt.year.unique()
 
-dff = df.copy()
+dff = df[df["WRSI"] > 0]
 
 df_events = pd.DataFrame()
 
 for wrsi_threshold in wrsi_thesholds:
     for per_t in percent_thresholds:
         for year in years:
+            print(year)
             df_year = dff[dff["time"].dt.year == year]
             for date in df_year["time"].unique():
                 df_date = df_year[df_year["time"] == date]
@@ -140,6 +147,10 @@ print(df_events)
 ```
 
 ```python
+print(df_events["date"].dt.month.unique())
+```
+
+```python
 # plot threshold frontier
 
 pd.options.mode.chained_assignment = None
@@ -152,8 +163,8 @@ def years_to_string(cell):
         return "<br>".join(map(str, cell))
 
 
-month_ranges = [range(1, 13)]
-month_range_names = ["ANY MONTH"]
+month_ranges = [[7], [8], [9], [7, 8, 9]]
+month_range_names = ["July", "August", "September", "ANY MONTH"]
 range_color = [1, 5]
 
 for month_range, month_range_name in zip(month_ranges, month_range_names):
@@ -193,7 +204,12 @@ for month_range, month_range_name in zip(month_ranges, month_range_names):
     )
     df_records.index = df_records.index.astype(str)
 
-    fig = px.imshow(df_freq, text_auto=True, range_color=range_color)
+    fig = px.imshow(
+        df_freq,
+        text_auto=True,
+        range_color=range_color,
+        color_continuous_scale="Reds",
+    )
     fig.update(
         data=[
             {
@@ -227,11 +243,22 @@ for month_range, month_range_name in zip(month_ranges, month_range_names):
 ```
 
 ```python
+date = datetime.datetime(2019, 8, 31)
+
+fig, ax = plt.subplots()
+ax.axis("off")
+ax.set_title(f"Date: {date:%Y-%m-%d}")
+
+gdf_aoi.boundary.plot(linewidth=1, ax=ax, color="grey")
+da.sel(time=date).plot(ax=ax, cmap="Reds_r", vmin=-2, vmax=0)
+```
+
+```python
 # WRSI animation
 
 # range_color = [-2, 0]
 fig = px.imshow(
-    da,
+    da.where(da != 0 & da != np.nan),
     animation_frame="time",
     origin="lower",
     #     range_color=range_color,

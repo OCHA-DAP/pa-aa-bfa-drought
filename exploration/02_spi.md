@@ -484,9 +484,5 @@ pyo.iplot(fig, auto_play=False)
 ```
 
 ```python
-print(da)
-```
-
-```python
 
 ```

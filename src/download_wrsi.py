@@ -18,7 +18,7 @@ end_date = datetime.date(2023, 1, 1)
 dates = pd.date_range(start_date, end_date, freq="10D")
 
 dekads = range(13, 34)
-years = range(1, 23)
+years = range(3, 23)
 
 for year in years:
     for dekad in dekads:
