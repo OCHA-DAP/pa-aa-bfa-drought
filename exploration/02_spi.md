@@ -40,6 +40,7 @@ from plotly.subplots import make_subplots
 from colour import Color
 import netCDF4
 import time
+import statsmodels.api as sm
 
 pyo.init_notebook_mode()
 ```
@@ -57,61 +58,10 @@ gdf_aoi = gdf_adm1.loc[gdf_adm1.ADM1_FR.isin(adm1_sel)]
 
 RAW_DIR = Path(os.environ["AA_DATA_DIR"]) / "public/raw/bfa"
 CMORPH_DIR = Path(os.environ["CMORPH_DIR"])
-```
-
-```python
-# read CMORPH data in bulk
-
-ds = xr.open_mfdataset(
-    os.path.join(CMORPH_DIR, "*.nc"),
-    combine="nested",
+PROCESSED_DIR = (
+    Path(os.environ["AA_DATA_DIR"]) / "public/processed/bfa/cmorph_spi"
 )
-ds.coords["lon"] = (ds.coords["lon"] + 180) % 360 - 180
-ds = ds.sortby(ds.lon)
-ds = ds.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
-ds.rio.write_crs("EPSG:3857", inplace=True)
-# TODO: set up more precise clipping with downcasting
-ds = ds.rio.clip(gdf_aoi["geometry"], all_touched=True)
-df = ds.to_dataframe().reset_index().drop(columns=["spatial_ref"])
-```
-
-```python
-# read CMORPH data one by one
-
-start_date = datetime.date(1998, 7, 1)
-# end_date = datetime.date(2023, 1, 1)
-end_date = datetime.date(2019, 9, 1)
-dates = pd.date_range(start_date, end_date, freq="M").to_series()
-dates = dates[dates.dt.month.isin([7, 8, 9])]
-
-dss = []
-
-for date in dates:
-    #     print(date)
-    path = (
-        CMORPH_DIR
-        / f"processed/cmorph_spi_gamma_30_day_{date:%Y-%m-%d}_bfa.nc"
-    )
-    #     path = CMORPH_DIR / f"daily/cmorph_spi_gamma_30_day_{date:%Y-%m-%d}.nc"
-    try:
-        ds = xr.open_dataset(path)
-    except FileNotFoundError as error:
-        print(f"couldn't read {date}")
-        print(error)
-        continue
-    ds.coords["lon"] = (ds.coords["lon"] + 180) % 360 - 180
-    ds = ds.sortby(ds.lon)
-    ds = ds.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
-    ds.rio.write_crs("EPSG:4326", inplace=True)
-    try:
-        ds = ds.rio.clip(gdf_aoi["geometry"], all_touched=True)
-    except Exception as error:
-        print(error)
-        continue
-    dss.append(ds)
-
-ds = xr.concat(dss, dim="time")
-df = ds.to_dataframe().reset_index().drop(columns=["spatial_ref"])
+EXP_DIR = Path(os.environ["AA_DATA_DIR"]) / "public/exploration/bfa"
 ```
 
 ```python
@@ -175,7 +125,7 @@ for date in dates:
 ```
 
 ```python
-# read processed (bfa clip)
+# read processed files (bfa clip)
 
 # drop dates with erroneous measurement
 DROP_DATES = ["2021-09-30"]
@@ -189,10 +139,7 @@ dates = dates.drop(DROP_DATES)
 dss = []
 
 for date in dates:
-    path = (
-        CMORPH_DIR
-        / f"processed/cmorph_spi_gamma_30_day_{date:%Y-%m-%d}_bfa.nc"
-    )
+    path = PROCESSED_DIR / f"cmorph_spi_gamma_30_day_{date:%Y-%m-%d}_bfa.nc"
     try:
         ds = xr.open_dataset(path)
     except FileNotFoundError as error:
@@ -203,6 +150,83 @@ for date in dates:
 
 da = xr.concat(dss, dim="time")["spi_gamma_30_day"]
 df = da.to_dataframe().reset_index()
+```
+
+```python
+# read yield data
+YIELD_PATH = (
+    RAW_DIR / "fao/Sorghum_Yield_Historical_FAOSTAT_data_en_7-7-2023.csv"
+)
+df_yield = pd.read_csv(YIELD_PATH)
+df_yield = df_yield.rename(columns={"Value": "Yield"})
+```
+
+```python
+# compare yield and spi
+
+months_of_interest = [7, 8, 9]
+
+df_moi = df[df["time"].dt.month.isin(months_of_interest)].dropna()
+df_moi = df_moi.rename(columns={"spi_gamma_30_day": "SPI"})
+df_moi["Year"] = df_moi["time"].dt.year
+for col in ["Year"]:
+    df_moi[f"{col} norm"] = (df_moi[col] - df_moi[col].mean()) / df_moi[
+        col
+    ].std()
+
+for month in months_of_interest:
+    df_month = df_moi[df_moi["time"].dt.month == month]
+    df_month = df_month.groupby("Year", as_index=False).mean()
+    df_month = pd.merge(df_month, df_yield[["Year", "Yield"]], on="Year")
+    fig = go.Figure(
+        layout=dict(
+            template="simple_white", title=f"BFA Sorghum Yield vs. SPI"
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df_month["SPI"],
+            y=df_month["Yield"],
+            name="",
+            mode="markers",
+            customdata=df_month["Year"],
+            hovertemplate="Year: %{customdata}<br>SPI: %{x}<br>Yield: %{y}",
+        )
+    )
+    fig.update_xaxes(title=f"SPI {month}")
+    fig.update_yaxes(title="Yield (100 g/ha)")
+    fig.show()
+
+    results = sm.OLS(
+        df_month["Yield"], sm.add_constant(df_month[[f"SPI", "Year norm"]])
+    ).fit()
+    print(results.summary())
+
+
+df_agg = df_moi.groupby("Year", as_index=False).mean()
+df_agg = pd.merge(df_agg, df_yield[["Year", "Yield"]], on="Year")
+
+fig = go.Figure(
+    layout=dict(template="simple_white", title=f"BFA Sorghum Yield vs. SPI")
+)
+fig.add_trace(
+    go.Scatter(
+        x=df_agg["SPI"],
+        y=df_agg["Yield"],
+        name="",
+        mode="markers",
+        customdata=df_agg["Year"],
+        hovertemplate="Year: %{customdata}<br>SPI: %{x}<br>Yield: %{y}",
+    )
+)
+fig.update_xaxes(title="SPI")
+fig.update_yaxes(title="Yield (100 g/ha)")
+fig.show()
+
+results = sm.OLS(
+    df_agg["Yield"], sm.add_constant(df_agg[[f"SPI", "Year norm"]])
+).fit()
+print(results.summary())
 ```
 
 ```python
@@ -331,7 +355,7 @@ pyo.iplot(fig)
 # determine historical triggers based on single threshold
 
 spi_thesholds = np.round(np.arange(-2, -0.75 + 0.01, 0.25), 2)
-percent_thresholds = np.round(np.arange(0.05, 0.3 + 0.01, 0.05), 2)
+percent_thresholds = np.round(np.arange(0.05, 0.4 + 0.01, 0.05), 2)
 
 dff = df[
     (df["time"].dt.month.isin(months_of_interest))
@@ -359,10 +383,13 @@ for spi_t in spi_thesholds:
                     )
                     df_events = pd.concat([df_events, df_count])
 
+df_events["Year"] = df_events["date"].dt.year
 print(df_events)
 ```
 
 ```python
+# plot triggers based on single threshold
+
 pd.options.mode.chained_assignment = None
 
 
@@ -453,6 +480,42 @@ for month_range, month_range_name in zip(month_ranges, month_range_names):
 ```
 
 ```python
+# write triggered years to file
+
+filename = "bfa_years_triggered.csv"
+filepath = EXP_DIR / "obsv_trigger" / filename
+
+keep = [
+    "aoi=0.1 spi=-1.75",
+    "aoi=0.15 spi=-1.75",
+    "aoi=0.2 spi=-1.5",
+    "aoi=0.25 spi=-1.0",
+    "aoi=0.3 spi=-1.25",
+    "aoi=0.4 spi=-1.25",
+]
+
+df_log = df_events.copy()
+df_log["aoi spi"] = (
+    "aoi="
+    + df_log["per_t"].astype(str)
+    + " spi="
+    + df_log["spi_t"].astype(str)
+)
+
+df_log = df_log[df_log["aoi spi"].isin(keep)]
+
+df_log = df_log.pivot_table(
+    index="Year", columns="aoi spi", values="date", aggfunc="first"
+)
+df_log = df_log.reindex(years)
+df_log = df_log.fillna("-")
+df_existing = pd.read_csv(filepath, index_col="Year")
+df_log = df_log.combine_first(df_existing)
+df_log = df_log.sort_values("Year", ascending=False)
+df_log.to_csv(filepath, date_format="%Y-%m-%d")
+```
+
+```python
 # determine historical triggers with different thresholds for different months
 
 aois = [
@@ -509,6 +572,8 @@ for spi_t in [-1, -1.25, -1.5]:
 ```
 
 ```python
+# plot triggers with different thresholds for different months
+
 dff = df_events.copy()
 dff["year"] = dff["date"].dt.year
 dff = dff.groupby(["year", "spi_t", "per_t"])["date"].apply(list).reset_index()
@@ -602,6 +667,7 @@ fig = px.imshow(
     origin="lower",
     range_color=range_color,
     color_continuous_scale="Reds_r",
+    aspect="equal",
 )
 fig.update_layout(template="simple_white")
 fig.update_xaxes(visible=False)
