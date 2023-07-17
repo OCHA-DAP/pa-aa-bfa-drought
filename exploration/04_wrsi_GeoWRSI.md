@@ -278,10 +278,13 @@ filepath = EXP_DIR / "obsv_trigger" / filename
 
 keep = [
     "aoi=0.1 wrsi=60",
+    "aoi=0.1 wrsi=55",
     "aoi=0.2 wrsi=70",
     "aoi=0.3 wrsi=75",
+    "aoi=0.3 wrsi=70",
     "aoi=0.2 wrsi=65",
     "aoi=0.4 wrsi=80",
+    "aoi=0.4 wrsi=75",
 ]
 
 df_log = df_events.copy()
