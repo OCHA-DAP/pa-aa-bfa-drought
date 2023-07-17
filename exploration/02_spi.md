@@ -487,10 +487,12 @@ filepath = EXP_DIR / "obsv_trigger" / filename
 
 keep = [
     "aoi=0.1 spi=-1.75",
+    "aoi=0.1 spi=-2.0",
     "aoi=0.15 spi=-1.75",
     "aoi=0.2 spi=-1.5",
     "aoi=0.25 spi=-1.0",
     "aoi=0.3 spi=-1.25",
+    "aoi=0.3 spi=-1.5",
     "aoi=0.4 spi=-1.25",
 ]
 
