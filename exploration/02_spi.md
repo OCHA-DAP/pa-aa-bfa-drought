@@ -6,11 +6,11 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.13.7
+      jupytext_version: 1.14.6
   kernelspec:
-    display_name: venv
+    display_name: pa-aa-bfa-drought
     language: python
-    name: venv
+    name: pa-aa-bfa-drought
 ---
 
 ```python
@@ -64,7 +64,7 @@ PROCESSED_DIR = (
 EXP_DIR = Path(os.environ["AA_DATA_DIR"]) / "public/exploration/bfa"
 ```
 
-```python
+```python jupyter={"outputs_hidden": true}
 # read and process historical CMORPH file (roughly 8 seconds per saved file)
 
 filename = CMORPH_DIR / "cmorph_spi_gamma_30_day.nc"
@@ -517,7 +517,7 @@ df_log = df_log.sort_values("Year", ascending=False)
 df_log.to_csv(filepath, date_format="%Y-%m-%d")
 ```
 
-```python
+```python jupyter={"outputs_hidden": true}
 # determine historical triggers with different thresholds for different months
 
 aois = [
