@@ -8,10 +8,12 @@ jupyter:
       format_version: '1.3'
       jupytext_version: 1.14.6
   kernelspec:
-    display_name: Python 3 (ipykernel)
+    display_name: pa-aa-bfa-drought
     language: python
-    name: python3
+    name: pa-aa-bfa-drought
 ---
+
+# GeoWRSI
 
 ```python
 %load_ext jupyter_black
@@ -97,7 +99,7 @@ for year in years:
         continue
     da = da.rio.write_crs("EPSG:4326")
     da = da.rio.clip(gdf_adm1["geometry"], all_touched=True)
-    
+
     da["Year"] = year
     das.append(da)
 
@@ -111,7 +113,7 @@ df = df[(df["WRSI"] != 254) & (df["WRSI"] != 0)]
 ```python
 # process WRSI data from GeoWRSI and store in processed dir
 
-years = range(2001, 2023, 1)
+years = range(2001, 2024, 1)
 dekads = range(1, 37, 1)
 
 not_found = []
@@ -133,6 +135,18 @@ for year in years:
         da["date"] = eff_date
         ds = da.to_dataset(name="WRSI")
         ds.to_netcdf(PROCESSED_DIR / f"{filename}_bfa.nc", engine="h5netcdf")
+```
+
+```python
+da = ds["WRSI"]
+# da.plot()
+df = da.to_dataframe()
+df = df.reset_index()
+df = df.drop(columns=["band", "spatial_ref"])
+df = df.dropna()
+df = df[(df["WRSI"] != 254) & (df["WRSI"] != 0)]
+df["WRSI"].hist()
+print(len(df[df["WRSI"] < 60]) / len(df))
 ```
 
 ```python
