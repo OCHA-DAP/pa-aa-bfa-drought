@@ -1,8 +1,9 @@
-import zipfile
-from dotenv import load_dotenv
-from pathlib import Path
-import os
 import datetime
+import os
+import zipfile
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -25,7 +26,7 @@ for year in years:
         extract_path = WRSI_EXTRACT_DIR / extract_folder
         print(filename)
         try:
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 zip_ref.extractall(extract_path)
         except Exception as e:
             print(e)

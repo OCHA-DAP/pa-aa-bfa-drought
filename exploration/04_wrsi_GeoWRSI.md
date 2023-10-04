@@ -37,10 +37,14 @@ import rasterio
 import rioxarray as rxr
 import xarray as xr
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+from matplotlib.colors import ListedColormap
+import matplotlib.colors
 import chart_studio
 import statsmodels.api as sm
 import datetime
 import numpy as np
+from rasterio.enums import Resampling
 
 pyo.init_notebook_mode()
 load_dotenv()
@@ -138,18 +142,6 @@ for year in years:
 ```
 
 ```python
-da = ds["WRSI"]
-# da.plot()
-df = da.to_dataframe()
-df = df.reset_index()
-df = df.drop(columns=["band", "spatial_ref"])
-df = df.dropna()
-df = df[(df["WRSI"] != 254) & (df["WRSI"] != 0)]
-df["WRSI"].hist()
-print(len(df[df["WRSI"] < 60]) / len(df))
-```
-
-```python
 # read processed data
 
 ds = xr.open_mfdataset(
@@ -165,6 +157,68 @@ df = df.reset_index()
 df = df.drop(columns=["band", "spatial_ref"])
 df = df.dropna()
 df = df[(df["WRSI"] != 254) & (df["WRSI"] != 0)]
+```
+
+```python
+# read specific date
+
+filename = "West Sahel Africa_WRSI_Index_d22_2023_bfa.nc"
+
+ds = xr.open_mfdataset(
+    PROCESSED_DIR / filename, concat_dim="date", combine="nested"
+)
+da = ds["WRSI"]
+da.rio.write_crs("EPSG:4326", inplace=True)
+resolution = 0.01
+da = da.rio.reproject(
+    dst_crs="EPSG:4326",
+    resolution=resolution,
+    resampling=Resampling.nearest,
+)
+da = da.assign_attrs(_FillValue=np.nan)
+da
+```
+
+```python
+da = da.rio.clip(gdf_aoi["geometry"], all_touched=True)
+df = da.to_dataframe()["WRSI"].reset_index().dropna()
+da
+```
+
+```python
+threshold = 75
+percent = len(df[df["WRSI"] < threshold]) / len(df) * 100
+
+date = pd.to_datetime(da.date[0].values).date()
+
+bounds = [0, 50, 60, 80, 95, 99, 100]
+colors = np.array(
+    [
+        [237, 108, 55, 255],
+        [201, 169, 76, 255],
+        [249, 255, 202, 255],
+        [203, 253, 92, 255],
+        [111, 219, 65, 255],
+        [77, 170, 75, 255],
+    ]
+).astype(float)
+colors /= 255
+cmap = matplotlib.colors.ListedColormap(colors)
+norm = matplotlib.colors.BoundaryNorm(bounds, len(colors))
+
+fig, ax = plt.subplots()
+ax.axis("off")
+
+gdf_aoi.boundary.plot(linewidth=1, ax=ax, color="grey")
+da.plot(ax=ax, cmap=cmap, norm=norm)
+ax.set_title(
+    f"Current WRSI at {date}\nArea with WRSI < {threshold}: {percent:.1f}%"
+)
+```
+
+```python
+df["WRSI"].hist()
+print(len(df[df["WRSI"] < 60]) / len(df))
 ```
 
 ```python
