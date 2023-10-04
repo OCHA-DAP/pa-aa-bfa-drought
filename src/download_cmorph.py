@@ -1,9 +1,10 @@
+import datetime
+import os
+import urllib.request
+from pathlib import Path
+
 import pandas as pd
 from dotenv import load_dotenv
-from pathlib import Path
-import os
-import datetime
-import urllib.request
 
 load_dotenv()
 CMORPH_DIR = Path(os.environ["CMORPH_DIR"])

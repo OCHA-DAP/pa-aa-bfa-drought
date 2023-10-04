@@ -1,14 +1,16 @@
 import json
-import pandas as pd
-from dotenv import load_dotenv
-from pathlib import Path
 import os
-import datetime
 import urllib.request
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 load_dotenv()
 NEW_CMORPH_DIR = Path(os.environ["NEW_CMORPH_DIR"])
-SPI1_CURRENT_URL = "https://storage.googleapis.com/noaa-nidis-drought-gov-data/current-conditions/tile/v1/ce-GLOBAL-NOAA_CPC_CMORPH-spi-1mo/"
+SPI1_CURRENT_URL = (
+    "https://storage.googleapis.com/noaa-nidis-drought-gov-data"
+    "/current-conditions/tile/v1/ce-GLOBAL-NOAA_CPC_CMORPH-spi-1mo/"
+)
 current_data_name = "GLOBAL-NOAA_CPC_CMORPH-spi-1mo.tif"
 DATA_URL = SPI1_CURRENT_URL + current_data_name
 current_metadata_name = "info.json"
