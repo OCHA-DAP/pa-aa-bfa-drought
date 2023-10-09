@@ -1,12 +1,12 @@
 ---
 jupyter:
   jupytext:
-    formats: ipynb,md
+    formats: md,ipynb
     text_representation:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.14.6
+      jupytext_version: 1.15.2
   kernelspec:
     display_name: pa-aa-bfa-drought
     language: python
@@ -75,6 +75,85 @@ GEOWRSI_OUTPUT_DIR = Path(os.environ["GEOWRSI_OUTPUT_DIR"])
 SAVE_DIR = Path("/Users/tdowning/OCHA/data/bfa")
 EXP_DIR = Path(os.environ["AA_DATA_DIR"]) / "public/exploration/bfa"
 ```
+
+## Process specific date
+
+```python
+# process raw GeoWRSI output
+
+year = 2023
+dekad = 21
+
+filestem = f"WRSI{year}{dekad}"
+# filename = "West Sahel Africa_WRSI_Index_d22_2023_bfa.nc"
+
+dayofyear = (dekad - 1) * 10
+eff_date = datetime.datetime(year, 1, 1) + datetime.timedelta(dayofyear - 1)
+da = rxr.open_rasterio(GEOWRSI_OUTPUT_DIR / f"{filestem}.bil")[0]
+da = da.rio.write_crs("EPSG:4326")
+da = da.rio.clip(gdf_adm1["geometry"], all_touched=True)
+da["date"] = eff_date
+ds = da.to_dataset(name="WRSI")
+ds.to_netcdf(PROCESSED_DIR / f"{filestem}_bfa.nc", engine="h5netcdf")
+```
+
+```python
+ds = xr.open_dataset(PROCESSED_DIR / f"{filestem}_bfa.nc")
+da = ds["WRSI"]
+da.rio.write_crs("EPSG:4326", inplace=True)
+display(da)
+da.plot()
+resolution = 0.01
+da = da.rio.reproject(
+    dst_crs="EPSG:4326",
+    resolution=resolution,
+    resampling=Resampling.nearest,
+)
+da = da.rio.clip(gdf_aoi["geometry"], all_touched=True)
+da.attrs["_FillValue"] = np.nan
+
+df = da.to_dataframe()
+```
+
+```python
+da = da.rio.clip(gdf_aoi["geometry"], all_touched=True)
+df = da.to_dataframe()["WRSI"].reset_index().dropna()
+da
+```
+
+```python
+threshold = 75
+percent = len(df[df["WRSI"] < threshold]) / len(df) * 100
+
+bounds = [0, 50, 60, 80, 95, 99, 100]
+colors = np.array(
+    [
+        [237, 108, 55, 255],
+        [201, 169, 76, 255],
+        [249, 255, 202, 255],
+        [203, 253, 92, 255],
+        [111, 219, 65, 255],
+        [77, 170, 75, 255],
+    ]
+).astype(float)
+colors /= 255
+cmap = matplotlib.colors.ListedColormap(colors)
+norm = matplotlib.colors.BoundaryNorm(bounds, len(colors))
+
+fig, ax = plt.subplots()
+ax.axis("off")
+
+gdf_aoi.boundary.plot(linewidth=1, ax=ax, color="grey")
+da.plot(ax=ax, cmap=cmap, norm=norm)
+da.isel(date=0).plot.contour(
+    levels=[threshold - 0.0001], ax=ax, cmap="Reds"
+)
+ax.set_title(
+    f"Current WRSI at {eff_date.date()}\nArea with WRSI < {threshold}: {percent:.1f}%"
+)
+```
+
+## Process all files
 
 ```python
 # load FAO yield data
@@ -159,67 +238,7 @@ df = df.dropna()
 df = df[(df["WRSI"] != 254) & (df["WRSI"] != 0)]
 ```
 
-```python
-# read specific date
-
-filename = "West Sahel Africa_WRSI_Index_d22_2023_bfa.nc"
-
-ds = xr.open_mfdataset(
-    PROCESSED_DIR / filename, concat_dim="date", combine="nested"
-)
-da = ds["WRSI"]
-da.rio.write_crs("EPSG:4326", inplace=True)
-resolution = 0.01
-da = da.rio.reproject(
-    dst_crs="EPSG:4326",
-    resolution=resolution,
-    resampling=Resampling.nearest,
-)
-da = da.assign_attrs(_FillValue=np.nan)
-da
-```
-
-```python
-da = da.rio.clip(gdf_aoi["geometry"], all_touched=True)
-df = da.to_dataframe()["WRSI"].reset_index().dropna()
-da
-```
-
-```python
-threshold = 75
-percent = len(df[df["WRSI"] < threshold]) / len(df) * 100
-
-date = pd.to_datetime(da.date[0].values).date()
-
-bounds = [0, 50, 60, 80, 95, 99, 100]
-colors = np.array(
-    [
-        [237, 108, 55, 255],
-        [201, 169, 76, 255],
-        [249, 255, 202, 255],
-        [203, 253, 92, 255],
-        [111, 219, 65, 255],
-        [77, 170, 75, 255],
-    ]
-).astype(float)
-colors /= 255
-cmap = matplotlib.colors.ListedColormap(colors)
-norm = matplotlib.colors.BoundaryNorm(bounds, len(colors))
-
-fig, ax = plt.subplots()
-ax.axis("off")
-
-gdf_aoi.boundary.plot(linewidth=1, ax=ax, color="grey")
-da.plot(ax=ax, cmap=cmap, norm=norm)
-ax.set_title(
-    f"Current WRSI at {date}\nArea with WRSI < {threshold}: {percent:.1f}%"
-)
-```
-
-```python
-df["WRSI"].hist()
-print(len(df[df["WRSI"] < 60]) / len(df))
-```
+## Historical analysis
 
 ```python
 # determine trigger events
