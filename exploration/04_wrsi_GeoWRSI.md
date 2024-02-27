@@ -122,8 +122,8 @@ da
 ```
 
 ```python
-threshold = 75
-percent = len(df[df["WRSI"] < threshold]) / len(df) * 100
+thresholds = [60, 75]
+cutoffs = [10, 30]
 
 bounds = [0, 50, 60, 80, 95, 99, 100]
 colors = np.array(
@@ -140,17 +140,17 @@ colors /= 255
 cmap = matplotlib.colors.ListedColormap(colors)
 norm = matplotlib.colors.BoundaryNorm(bounds, len(colors))
 
-fig, ax = plt.subplots()
-ax.axis("off")
+for threshold, cutoff in zip(thresholds, cutoffs):
+    percent = len(df[df["WRSI"] < threshold]) / len(df) * 100
+    fig, ax = plt.subplots()
+    ax.axis("off")
 
-gdf_aoi.boundary.plot(linewidth=1, ax=ax, color="grey")
-da.plot(ax=ax, cmap=cmap, norm=norm)
-da.isel(date=0).plot.contour(
-    levels=[threshold - 0.0001], ax=ax, cmap="Reds"
-)
-ax.set_title(
-    f"Current WRSI at {eff_date.date()}\nArea with WRSI < {threshold}: {percent:.1f}%"
-)
+    gdf_aoi.boundary.plot(linewidth=1, ax=ax, color="grey")
+    da.plot(ax=ax, cmap=cmap, norm=norm)
+    da.plot.contour(levels=[threshold - 0.0001], ax=ax, cmap="Reds")
+    ax.set_title(
+        f"Current WRSI at {eff_date.date()}\nArea with WRSI < {threshold}: {percent:.1f}%"
+    )
 ```
 
 ## Process all files
