@@ -32,14 +32,17 @@ def process_spi():
         datestr = clean_filename.removeprefix(
             "GLOBAL-NOAA_CPC_CMORPH-spi-1mo"
         ).removesuffix(".tif")[1:]
+        output_filename = f"bfa-spi1-{datestr}.nc"
+        output_filepath = SPI_PROC_DIR / output_filename
+        if output_filepath.exists():
+            print(f"already processed {output_filename}")
+            continue
         date = pd.to_datetime(datestr, format="%Y-%m-%d")
         da = rxr.open_rasterio(NEW_CMORPH_DIR / filename)
         da = da.rio.clip(gdf_adm0["geometry"], all_touched=True)
         da = da.expand_dims(dim={"date": [date]})
         da = da.sel(band=1).drop("band")
         ds = da.to_dataset(name="spi_1")
-        output_filename = f"bfa-spi1-{datestr}.nc"
-        output_filepath = SPI_PROC_DIR / output_filename
         if output_filepath.exists():
             output_filepath.unlink()
         ds.to_netcdf(output_filepath)
