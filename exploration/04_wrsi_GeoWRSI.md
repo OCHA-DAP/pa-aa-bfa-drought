@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.15.2
+      jupytext_version: 1.16.1
   kernelspec:
     display_name: pa-aa-bfa-drought
     language: python
@@ -76,12 +76,16 @@ SAVE_DIR = Path("/Users/tdowning/OCHA/data/bfa")
 EXP_DIR = Path(os.environ["AA_DATA_DIR"]) / "public/exploration/bfa"
 ```
 
+```python
+GEOWRSI_OUTPUT_DIR
+```
+
 ## Process specific date
 
 ```python
 # process raw GeoWRSI output
 
-year = 2023
+year = 2024
 dekad = 21
 
 filestem = f"WRSI{year}{dekad}"
@@ -95,6 +99,23 @@ da = da.rio.clip(gdf_adm1["geometry"], all_touched=True)
 da["date"] = eff_date
 ds = da.to_dataset(name="WRSI")
 ds.to_netcdf(PROCESSED_DIR / f"{filestem}_bfa.nc", engine="h5netcdf")
+```
+
+```python
+month = ((dekad - 1) // 3) + 1
+dekad_of_month = ((dekad - 1) % 3) + 1
+```
+
+```python
+month, dekad_of_month
+```
+
+```python
+month_fr = {7: "juill.", 8: "août", 9: "sept.", 10: "oct."}.get(month)
+```
+
+```python
+month_fr
 ```
 
 ```python
@@ -118,7 +139,6 @@ df = da.to_dataframe()
 ```python
 da = da.rio.clip(gdf_aoi["geometry"], all_touched=True)
 df = da.to_dataframe()["WRSI"].reset_index().dropna()
-da
 ```
 
 ```python
@@ -142,14 +162,21 @@ norm = matplotlib.colors.BoundaryNorm(bounds, len(colors))
 
 for threshold, cutoff in zip(thresholds, cutoffs):
     percent = len(df[df["WRSI"] < threshold]) / len(df) * 100
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10, 4), dpi=200)
     ax.axis("off")
 
     gdf_aoi.boundary.plot(linewidth=1, ax=ax, color="grey")
-    da.plot(ax=ax, cmap=cmap, norm=norm)
-    da.plot.contour(levels=[threshold - 0.0001], ax=ax, cmap="Reds")
+    da.plot(ax=ax, cmap=cmap, norm=norm, alpha=0.7)
+    da.plot.contour(
+        levels=[0, threshold - 0.0001, 101],
+        ax=ax,
+        cmap="Reds",
+        linewidths=1.5,
+    )
+    percent_fr = f"{percent:.1f}".replace(".", ",")
     ax.set_title(
-        f"Current WRSI at {eff_date.date()}\nArea with WRSI < {threshold}: {percent:.1f}%"
+        f"WRSI actuel à fin de {dekad_of_month}e décade de {month_fr}\n"
+        f"Frac. zone avec WRSI < {threshold} : {percent_fr}% (seuil {cutoff}%)"
     )
 ```
 
