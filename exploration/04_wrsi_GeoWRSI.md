@@ -86,7 +86,7 @@ GEOWRSI_OUTPUT_DIR
 # process raw GeoWRSI output
 
 year = 2024
-dekad = 21
+dekad = 24
 
 filestem = f"WRSI{year}{dekad}"
 # filename = "West Sahel Africa_WRSI_Index_d22_2023_bfa.nc"
@@ -303,6 +303,15 @@ for t_aoi in t_aois:
                     df_events = pd.concat([df_events, df_count])
 
 df_events["Year"] = df_events["Date"].dt.year
+```
+
+```python
+df_events
+```
+
+```python
+# determine only trigger event for finalized trigger
+df_events[(df_events["t_aoi"] == 0.3) & (df_events["t_wrsi"] == 75)]
 ```
 
 ```python
