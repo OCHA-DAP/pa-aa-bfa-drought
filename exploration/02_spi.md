@@ -6,12 +6,14 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.14.6
+      jupytext_version: 1.16.1
   kernelspec:
     display_name: pa-aa-bfa-drought
     language: python
     name: pa-aa-bfa-drought
 ---
+
+# SPI
 
 ```python
 %load_ext jupyter_black
@@ -195,7 +197,7 @@ for month in months_of_interest:
     )
     fig.update_xaxes(title=f"SPI {month}")
     fig.update_yaxes(title="Yield (100 g/ha)")
-    fig.show()
+    # fig.show()
 
     results = sm.OLS(
         df_month["Yield"], sm.add_constant(df_month[[f"SPI", "Year norm"]])
@@ -256,7 +258,8 @@ drop_dates = total_cells[total_cells["count"] < CELLS_CUTOFF].reset_index()[
     "time"
 ]
 
-# set dates to drop based on dates with erroneous measurements (too many with SPI <-3)
+# set dates to drop based on dates with erroneous measurements
+# (too many with SPI <-3)
 drop_dates = pd.concat(
     [
         drop_dates,
@@ -358,8 +361,7 @@ spi_thesholds = np.round(np.arange(-2, -0.75 + 0.01, 0.25), 2)
 percent_thresholds = np.round(np.arange(0.05, 0.4 + 0.01, 0.05), 2)
 
 dff = df[
-    (df["time"].dt.month.isin(months_of_interest))
-    & ~(df["time"].isin(drop_dates))
+    (df["time"].dt.month.isin(months_of_interest)) & ~(df["time"].isin([]))
 ]
 
 years = df["time"].dt.year.unique()
@@ -385,6 +387,11 @@ for spi_t in spi_thesholds:
 
 df_events["Year"] = df_events["date"].dt.year
 print(df_events)
+```
+
+```python
+# check triggers for finalized trigger
+df_events[(df_events["spi_t"] == -1.5) & (df_events["per_t"] == 0.3)]
 ```
 
 ```python
@@ -517,7 +524,7 @@ df_log = df_log.sort_values("Year", ascending=False)
 df_log.to_csv(filepath, date_format="%Y-%m-%d")
 ```
 
-```python jupyter={"outputs_hidden": true}
+```python
 # determine historical triggers with different thresholds for different months
 
 aois = [
@@ -567,7 +574,8 @@ for spi_t in [-1, -1.25, -1.5]:
         years_triggered = df_events_t["date"].dt.year.unique()
         return_period = len(years) / len(years_triggered)
         print(
-            f"with SPI {spi_t} and AOI {aoi_str}: triggered {len(years_triggered)} out of {len(years)} (return period {return_period:.3} years)"
+            f"with SPI {spi_t} and AOI {aoi_str}: triggered {len(years_triggered)}"
+            f"out of {len(years)} (return period {return_period:.3} years)"
         )
         print(years_triggered)
         print()

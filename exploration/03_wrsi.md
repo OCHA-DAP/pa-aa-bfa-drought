@@ -6,12 +6,14 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.13.7
+      jupytext_version: 1.16.1
   kernelspec:
-    display_name: venv
+    display_name: pa-aa-bfa-drought
     language: python
-    name: venv
+    name: pa-aa-bfa-drought
 ---
+
+# WRSI
 
 ```python
 %load_ext jupyter_black
