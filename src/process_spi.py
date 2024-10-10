@@ -14,7 +14,7 @@ SPI_PROC_DIR = AA_DATA_DIR / "public/processed/bfa/cmorph_spi/new"
 RAW_DIR = AA_DATA_DIR / "public/raw/bfa"
 
 
-def process_spi():
+def process_spi(verbose: bool = False):
     country_config = create_country_config(iso3="bfa")
     codab = CodAB(country_config=country_config)
     gdf_adm0 = codab.load()
@@ -39,6 +39,8 @@ def process_spi():
             continue
         date = pd.to_datetime(datestr, format="%Y-%m-%d")
         da = rxr.open_rasterio(NEW_CMORPH_DIR / filename)
+        if verbose:
+            print(da)
         da = da.rio.clip(gdf_adm0["geometry"], all_touched=True)
         da = da.expand_dims(dim={"date": [date]})
         da = da.sel(band=1).drop("band")

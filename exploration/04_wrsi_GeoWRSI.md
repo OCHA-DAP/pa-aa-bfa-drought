@@ -86,7 +86,7 @@ GEOWRSI_OUTPUT_DIR
 # process raw GeoWRSI output
 
 year = 2024
-dekad = 24
+dekad = 27
 
 filestem = f"WRSI{year}{dekad}"
 # filename = "West Sahel Africa_WRSI_Index_d22_2023_bfa.nc"
