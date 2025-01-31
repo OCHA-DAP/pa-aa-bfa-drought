@@ -22,11 +22,11 @@ i.e. a leadtime of 1 month
 import itertools
 from pathlib import Path
 
-import aatoolbox.utils.raster  # noqa: F401
+import ochanticipy.utils.raster  # noqa: F401
 import numpy as np
 import pandas as pd
 import xarray as xr
-from aatoolbox import CodAB, GeoBoundingBox, IriForecastProb
+from ochanticipy import CodAB, GeoBoundingBox, IriForecastProb
 from dateutil.relativedelta import relativedelta
 from geopandas import GeoDataFrame
 from rasterio.enums import Resampling
