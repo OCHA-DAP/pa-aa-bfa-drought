@@ -22,7 +22,7 @@ DS_AZ_BLOB_PROD_HOST = "imb0chd0prod.blob.core.windows.net"
 
 AZURE_BLOB_BASE_URL = "https://{host}/{container_name}?{sas}"
 
-PROJECT_PREFIX = "ds-aa-tcd-drought"
+PROJECT_PREFIX = "pa-aa-bfa-drought"
 
 
 def get_container_client(
