@@ -15,3 +15,4 @@ pyarrow==17.0.0
 dask==2024.8.0
 tqdm==4.66.1
 matplotlib==3.8.2
+seaborn==0.13.2
