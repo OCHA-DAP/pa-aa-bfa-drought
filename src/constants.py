@@ -26,3 +26,25 @@ SAHEL1 = "BF56"
 AOI_ADM1_PCODES = [BOUCLEDUMOUHOUN1, NORD1, CENTRENORD1, SAHEL1]
 
 CERF_YEARS = [2008, 2012]
+
+ORIGINAL_MO_LT_COMBOS = [
+    {"mo": 3, "lts": [3, 4, 5]},
+    {"mo": 7, "lts": [1, 2, 3]},
+]
+ORIGINAL_Q = perc_area / 100
+ORIGINAL_IRI_THRESH = threshold_bavg
+
+FRENCH_MONTHS = {
+    "Jan": "jan.",
+    "Feb": "fév.",
+    "Mar": "mars",
+    "Apr": "avr.",
+    "May": "mai",
+    "Jun": "juin",
+    "Jul": "juil.",
+    "Aug": "août",
+    "Sep": "sept.",
+    "Oct": "oct.",
+    "Nov": "nov.",
+    "Dec": "déc.",
+}

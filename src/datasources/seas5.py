@@ -3,6 +3,7 @@ from typing import List
 import xarray as xr
 from tqdm.auto import tqdm
 
+from src.constants import ORIGINAL_MO_LT_COMBOS
 from src.utils import blob_utils
 
 START_YEAR = 1981
@@ -21,10 +22,7 @@ def open_seas5_cog(issued_date_str: str, lt: int):
 def open_seas5_rasters(mo_lt_combos: List[dict] = None):
     if mo_lt_combos is None:
         # set to original IRI framework combinations
-        mo_lt_combos = [
-            {"mo": 3, "lts": [3, 4, 5]},
-            {"mo": 7, "lts": [1, 2, 3]},
-        ]
+        mo_lt_combos = ORIGINAL_MO_LT_COMBOS
     das = []
     for year in tqdm(range(START_YEAR, END_YEAR + 1)):
         for mo_lt_combo in mo_lt_combos:
