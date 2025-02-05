@@ -15,6 +15,16 @@ jupyter:
 
 # ECMWF switch
 
+Notebook to develop SEAS5 trigger to replaces IRI seasonal forecast.
+SEAS5 trigger mechanism intended to match behaviour of IRI, keeping the same:
+
+- issue months
+- valid months
+- geographic aggregation method (10% of area meets condition)
+
+Note that return period cannot really be matched because return period of IRI
+trigger was not estimated.
+
 ```python
 %load_ext jupyter_black
 %load_ext autoreload
@@ -22,76 +32,30 @@ jupyter:
 ```
 
 ```python
-import calendar
-from typing import List
-
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import numpy as np
 import statsmodels.api as sm
-from statsmodels.tsa.stattools import adfuller
-from dask.diagnostics import ProgressBar
 
-from src.datasources import codab, seas5, iri
+from src.datasources import seas5, iri
 from src.utils.raster import upsample_dataarray
+from src.utils.rp_calc import calculate_groups_rp
 from src.utils import blob_utils
 from src.constants import *
 ```
 
+## SEAS5
+
+### Loading and processing
+
 ```python
-codab.download_codab_to_blob()
+# seas5.process_seas5_rasters()
 ```
 
 ```python
-adm1 = codab.load_codab_from_blob(admin_level=1, aoi_only=True)
-```
-
-```python
-adm1.plot()
-```
-
-```python
-da_seas5 = seas5.open_seas5_rasters()
-```
-
-```python
-da_seas5
-```
-
-```python
-da_seas5_tri = da_seas5.mean(dim="lt")
-```
-
-```python
-da_seas5_up = upsample_dataarray(da_seas5_tri)
-```
-
-```python
-da_seas5_clip = da_seas5_up.rio.clip(adm1.geometry)
-```
-
-```python
-da_seas5_q = da_seas5_clip.quantile(q=ORIGINAL_Q, dim=["x", "y"])
-```
-
-```python
-with ProgressBar():
-    da_seas5_q_computed = da_seas5_q.compute()
-```
-
-```python
-da_seas5_q_computed
-```
-
-```python
-df_seas5 = da_seas5_q_computed.to_dataframe("q")["q"].reset_index()
-```
-
-```python
-blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_original_trigger_raster_stats.parquet"
-blob_utils.upload_parquet_to_blob(df_seas5, blob_name)
+df_seas5 = seas5.load_seas5_stats()
 ```
 
 ```python
@@ -100,22 +64,20 @@ for issued_month, group in df_seas5.groupby("issued_month"):
 ```
 
 ```python
-def calculate_groups_rp(df: pd.DataFrame, by: List):
-    def calculate_rp(group, col_name: str = "q", ascending: bool = True):
-        group[f"{col_name}_rank"] = group[col_name].rank(ascending=ascending)
-        group[f"{col_name}_rp"] = (len(group) + 1) / group[f"{col_name}_rank"]
-        return group
-
-    return (
-        df.groupby(by)
-        .apply(calculate_rp, include_groups=False)
-        .reset_index()
-        .drop(columns=f"level_{len(by)}")
-    )
+df_seas5 = calculate_groups_rp(df_seas5, ["issued_month"])
 ```
 
 ```python
-df_seas5 = calculate_groups_rp(df_seas5, ["issued_month"])
+df_seas5
+```
+
+### Checking combined RP
+
+```python
+df_pivot_rps = df_seas5.pivot(
+    index="year", columns="issued_month", values="q_rp"
+).reset_index()
+df_pivot_rps = df_pivot_rps.rename(columns={x: f"issued_{x}" for x in [3, 7]})
 ```
 
 ```python
@@ -126,7 +88,10 @@ rp_list = df_seas5["q_rp"].unique()
 rp_list = rp_list[rp_list >= min_individual_rp]
 for rp_3 in rp_list:
     for rp_7 in rp_list:
-        dff = df_pivot[(df_pivot[3] >= rp_3) | (df_pivot[7] >= rp_7)]
+        dff = df_pivot[
+            (df_pivot_rps["issued_3"] >= rp_3)
+            | (df_pivot_rps["issued_7"] >= rp_7)
+        ]
         dicts.append(
             {
                 "rp_3": rp_3,
@@ -145,7 +110,6 @@ heatmap_data = df_rps.pivot(index="rp_7", columns="rp_3", values="rp_overall")
 ```python
 bounds = [1, 2, 2.5, 3, 4, 5, 6, 10, 1000]
 tick_bounds = bounds[1:-1]
-norm = mcolors.BoundaryNorm(bounds, cmap.N)
 cmap = plt.cm.Spectral_r
 norm = mcolors.BoundaryNorm(bounds, cmap.N)
 
@@ -158,7 +122,7 @@ sns.heatmap(
     norm=norm,
     alpha=0.8,
     cbar_kws={
-        "label": "Période de retour globale",
+        "label": "Période de retour combinée",
         "ticks": tick_bounds,
         "shrink": 0.8,
     },
@@ -167,7 +131,7 @@ sns.heatmap(
 ax.invert_yaxis()
 ax.set_aspect("equal", adjustable="box")
 ax.set_title(
-    "Périodes de retour individuelles vs. période de retour globale,\n"
+    "Périodes de retour individuelles vs. période de retour combinée,\n"
     f"prévisions saisonnières SEAS5, depuis {df_seas5['year'].min()}"
 )
 ax.set_xlabel("Mars : période de retour des prévisions")
@@ -188,15 +152,13 @@ for x in tick_positions:
 plt.show()
 ```
 
+### Check trend
+
 ```python
 df_pivot = df_seas5.pivot(
     index="year", columns="issued_month", values="q"
 ).reset_index()
 df_pivot = df_pivot.rename(columns={x: f"issued_{x}" for x in [3, 7]})
-```
-
-```python
-df_pivot
 ```
 
 ```python
@@ -214,6 +176,13 @@ for issued_month in [3, 7]:
 ```python
 min_year = 2000
 df_pivot_recent = df_pivot[df_pivot["year"] >= min_year]
+```
+
+```python
+df_pivot_recent.plot(x="year", y=["issued_3", "issued_7"])
+```
+
+```python
 for issued_month in [3, 7]:
     X = sm.add_constant(df_pivot_recent.index)
     model = sm.OLS(df_pivot_recent[f"issued_{issued_month}"], X).fit()
@@ -222,14 +191,25 @@ for issued_month in [3, 7]:
 ```
 
 ```python
-df_pivot_recent = df_
+df_pivot_recent
 ```
+
+### Plot historical activations
 
 ```python
 rp_individual_seas5 = 5
 
+thresh_3 = df_pivot_recent["issued_3"].quantile(1 / rp_individual_seas5)
+thresh_7 = df_pivot_recent["issued_7"].quantile(1 / rp_individual_seas5)
+
+rp_overall = (len(df_pivot_recent) + 1) / df_pivot_recent[
+    (df_pivot_recent["issued_3"] <= thresh_3)
+    | (df_pivot_recent["issued_7"] <= thresh_7)
+]["year"].nunique()
+
 fig, ax = plt.subplots(dpi=200, figsize=(6, 6))
 
+# uncomment to plot actual points
 # df_pivot.plot(
 #     x="issued_3",
 #     y="issued_7",
@@ -245,14 +225,13 @@ xmax = df_pivot_recent["issued_3"].max() * 1.02
 ymin = df_pivot_recent["issued_7"].min() * 0.95
 ymax = df_pivot_recent["issued_7"].max() * 1.02
 
-alpha = 0.15
+alpha = 0.1
 
 color_3 = "darkorange"
-thresh_3 = df_pivot_recent["issued_3"].quantile(1 / rp_individual_seas5)
 ax.axvline(thresh_3, color=color_3)
 ax.axvspan(xmin=xmin, xmax=thresh_3, facecolor=color_3, alpha=alpha)
 ax.annotate(
-    f" Seuil PR {rp_individual_seas5}-ans",
+    f" Seuil PR {rp_individual_seas5}-ans = {thresh_3:.2f} mm",
     (thresh_3, ymin),
     rotation=90,
     ha="right",
@@ -262,11 +241,10 @@ ax.annotate(
 )
 
 color_7 = "rebeccapurple"
-thresh_7 = df_pivot_recent["issued_7"].quantile(1 / rp_individual_seas5)
 ax.axhline(thresh_7, color=color_7)
 ax.axhspan(ymin=ymin, ymax=thresh_7, facecolor=color_7, alpha=alpha)
 ax.annotate(
-    f" Seuil PR {rp_individual_seas5}-ans",
+    f" Seuil PR {rp_individual_seas5}-ans = {thresh_7:.2f} mm",
     (xmin, thresh_7),
     ha="left",
     va="bottom",
@@ -295,21 +273,18 @@ ax.set_ylabel(
     "Prévision de juillet : précipitations moyennes JJA,\n"
     "10e centile sur la zone d'intérêt (mm / jour)"
 )
+ax.set_title(
+    f"Déclenchements historiques des prévisions SEAS, depuis {min_year}\n"
+    f"(période de retour combinée = {rp_overall:.2f} ans)"
+)
 
 ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
 ```
 
-```python
-print("overall rp:")
-print(
-    (len(df_pivot_recent) + 1)
-    / df_pivot_recent[
-        (df_pivot_recent["issued_3"] <= thresh_3)
-        | (df_pivot_recent["issued_7"] <= thresh_7)
-    ]["year"].nunique()
-)
-```
+## IRI
+
+### Load and process
 
 ```python
 ds_iri = iri.load_raw_iri()
@@ -358,14 +333,33 @@ df_iri_triggers = df_iri[
 df_iri_triggers
 ```
 
+### Plot trend
+
 ```python
 df_iri_triggers.pivot(index="year", columns="issued_month", values="q").plot()
+```
+
+```python
+df_iri_triggers
+```
+
+```python
+for issued_month in [3, 7]:
+    dff = df_iri_triggers[df_iri_triggers["issued_month"] == issued_month]
+    X = sm.add_constant(dff.index)
+    model = sm.OLS(dff["q"], X).fit()
+    print(f"issued month {issued_month}")
+    print(model.summary())
 ```
 
 ```python
 blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/iri/iri_original_trigger_raster_stats.parquet"
 blob_utils.upload_parquet_to_blob(df_iri_triggers, blob_name)
 ```
+
+## Comparison
+
+### Plot comparison plots
 
 ```python
 df_compare = df_seas5.merge(
@@ -374,16 +368,12 @@ df_compare = df_seas5.merge(
 ```
 
 ```python
-FRENCH_MONTHS.get(calendar.month_abbr[1])
-```
-
-```python
 x_var = "q_iri"
 y_var = "q_seas5"
 x_color = "darkblue"
 y_color = "green"
 xmin, xmax = 20, 45
-alpha = 0.2
+alpha = 0.1
 
 for issued_month, seas5_thresh, trimester in zip(
     [3, 7], [thresh_3, thresh_7], ["JJA", "ASO"]
@@ -422,7 +412,7 @@ for issued_month, seas5_thresh, trimester in zip(
     ax.axhline(seas5_thresh, color=y_color)
     ax.axhspan(ymin, seas5_thresh, facecolor=y_color, alpha=alpha)
     ax.annotate(
-        f" Seuil PR {rp_individual_seas5}-ans",
+        f" Seuil PR {rp_individual_seas5}-ans = {seas5_thresh:.2f} mm",
         (xmin, seas5_thresh),
         va="bottom",
         ha="left",
