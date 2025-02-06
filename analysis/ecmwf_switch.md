@@ -32,6 +32,8 @@ trigger was not estimated.
 ```
 
 ```python
+import calendar
+
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -39,7 +41,7 @@ import matplotlib.colors as mcolors
 import numpy as np
 import statsmodels.api as sm
 
-from src.datasources import seas5, iri
+from src.datasources import seas5, iri, codab
 from src.utils.raster import upsample_dataarray
 from src.utils.rp_calc import calculate_groups_rp
 from src.utils import blob_utils
@@ -51,6 +53,7 @@ from src.constants import *
 ### Loading and processing
 
 ```python
+# if needed, process SEAS5 rasters (takes a few minutes)
 # seas5.process_seas5_rasters()
 ```
 
@@ -59,6 +62,7 @@ df_seas5 = seas5.load_seas5_stats()
 ```
 
 ```python
+# just check the histogram to see that it's sensible
 for issued_month, group in df_seas5.groupby("issued_month"):
     group["q"].hist(alpha=0.3)
 ```
@@ -88,7 +92,7 @@ rp_list = df_seas5["q_rp"].unique()
 rp_list = rp_list[rp_list >= min_individual_rp]
 for rp_3 in rp_list:
     for rp_7 in rp_list:
-        dff = df_pivot[
+        dff = df_pivot_rps[
             (df_pivot_rps["issued_3"] >= rp_3)
             | (df_pivot_rps["issued_7"] >= rp_7)
         ]
@@ -152,6 +156,9 @@ for x in tick_positions:
 plt.show()
 ```
 
+Looks like taking 5 years for each month would yield a
+3-4 year combined RP.
+
 ### Check trend
 
 ```python
@@ -173,6 +180,10 @@ for issued_month in [3, 7]:
     print(model.summary())
 ```
 
+As a crude check, we see that the confidence intervals for the slope are
+positive. So we can try to filter to more recent years to hopefully
+make it trendless.
+
 ```python
 min_year = 2000
 df_pivot_recent = df_pivot[df_pivot["year"] >= min_year]
@@ -189,6 +200,8 @@ for issued_month in [3, 7]:
     print(f"issued month {issued_month}")
     print(model.summary())
 ```
+
+Confidence intervals of slope span 0 now, so we're good.
 
 ```python
 df_pivot_recent
@@ -285,6 +298,13 @@ ax.spines["right"].set_visible(False)
 ## IRI
 
 ### Load and process
+
+```python
+adm1 = codab.load_codab_from_blob(admin_level=1, aoi_only=True)
+```
+
+Do same processing with IRI, although this is faster since it's reading a
+local file
 
 ```python
 ds_iri = iri.load_raw_iri()
