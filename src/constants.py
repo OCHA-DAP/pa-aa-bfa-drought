@@ -48,3 +48,12 @@ FRENCH_MONTHS = {
     "Nov": "nov.",
     "Dec": "déc.",
 }
+
+ASAP0_ID = 219
+
+ASAP1_IDS = {
+    BOUCLEDUMOUHOUN1: 2244,
+    NORD1: 2246,
+    CENTRENORD1: 1760,
+    SAHEL1: 2174,
+}
