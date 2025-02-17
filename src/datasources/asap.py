@@ -44,6 +44,11 @@ def process_asap_warnings():
 
 
 def load_raw_asap_warnings():
+    """Load raw ASAP warnings data from blob storage,
+    which were downloaded from:
+    https://agricultural-production-hotspots.ec.europa.eu/download.php
+    (filename warnings_ts.zip/warnings_ts.csv)
+    """
     blob_name = get_blob_name("raw", "warnings")
     return blob_utils.load_csv_from_blob(blob_name, sep=";")
 
