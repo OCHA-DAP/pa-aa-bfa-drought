@@ -57,3 +57,18 @@ ASAP1_IDS = {
     CENTRENORD1: 1760,
     SAHEL1: 2174,
 }
+
+SEN_DEKADS = {
+    "crop": {
+        BOUCLEDUMOUHOUN1: 30,
+        NORD1: 29,
+        CENTRENORD1: 29,
+        SAHEL1: 28,
+    },
+    "range": {
+        BOUCLEDUMOUHOUN1: 29,
+        NORD1: 29,
+        CENTRENORD1: 29,
+        SAHEL1: 28,
+    },
+}
