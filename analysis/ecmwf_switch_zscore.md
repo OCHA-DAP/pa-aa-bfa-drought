@@ -15,6 +15,8 @@ jupyter:
 
 # ECMWF z-score
 
+Doing the same thing as in `ecmwf_switch` but with Z-score
+
 ```python
 %load_ext jupyter_black
 %load_ext autoreload
@@ -31,6 +33,7 @@ import matplotlib.colors as mcolors
 import numpy as np
 import statsmodels.api as sm
 from dask.diagnostics import ProgressBar
+from scipy.stats import skewnorm
 
 from src.datasources import seas5, iri, codab
 from src.utils.raster import upsample_dataarray
@@ -42,6 +45,8 @@ from src.constants import *
 ```python
 adm1 = codab.load_codab_from_blob(admin_level=1, aoi_only=True)
 ```
+
+## Process Z-score
 
 ```python
 da_seas5 = seas5.open_seas5_rasters()
@@ -64,6 +69,10 @@ adm1.boundary.plot(ax=ax, color="k")
 ax.axis("off")
 ```
 
+### Calculate mean
+
+Computing and plotting things as I go just to ensure they look sensible.
+
 ```python
 da_seas5_mean = da_seas5_clip.mean(dim="year")
 ```
@@ -76,6 +85,8 @@ with ProgressBar():
 ```python
 da_seas5_mean_computed.isel(issued_month=0).plot()
 ```
+
+### Calculate std dev
 
 ```python
 da_seas5_std = da_seas5_clip.std(dim="year")
@@ -93,6 +104,8 @@ with ProgressBar():
 ```python
 da_seas5_std_computed.isel(issued_month=0).plot()
 ```
+
+### Calculate Z-score
 
 ```python
 da_seas5_zscore = (da_seas5_clip - da_seas5_mean) / da_seas5_std
@@ -122,6 +135,8 @@ with ProgressBar():
 ```python
 da_seas5_zscore_q_computed.isel(issued_month=0).plot()
 ```
+
+### Write to `df` and save to blob
 
 ```python
 df_seas5_zscore_q = da_seas5_zscore_q_computed.to_dataframe("q")[
@@ -260,9 +275,6 @@ for x in tick_positions:
 plt.show()
 ```
 
-Looks like taking 5 years for each month would yield a
-3-4 year combined RP.
-
 ### Check trend
 
 ```python
@@ -284,7 +296,8 @@ for issued_month in [3, 7]:
     print(model.summary())
 ```
 
-As a crude check, we see that the confidence intervals for the slope are
+Same as for absolute values -
+as a crude check, we see that the confidence intervals for the slope are
 positive. So we can try to filter to more recent years to hopefully
 make it trendless.
 
@@ -394,9 +407,11 @@ ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
 ```
 
+Fixing thresholds based on modeled RP (values calculated a few cells down)
+
 ```python
-thresh_3 = -0.75
-thresh_7 = -0.75
+thresh_3 = -0.9
+thresh_7 = -0.66
 
 rp_overall = (len(df_pivot_recent) + 1) / df_pivot_recent[
     (df_pivot_recent["issued_3"] <= thresh_3)
@@ -469,169 +484,78 @@ ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
 ```
 
-## IRI
+### Model RP
 
-### Load and process
+Modeling the RP using a skew normal distribution.
+To me this seems reasonable, since the Z-scores are probably roughly normally distributed,
+since we're not too close to zero.
+But then, things get skewed because we're taking the 10th quantile.
 
-```python
-adm1 = codab.load_codab_from_blob(admin_level=1, aoi_only=True)
-```
-
-Do same processing with IRI, although this is faster since it's reading a
-local file
-
-```python
-ds_iri = iri.load_raw_iri()
-```
+Anyways, these are the values that are used in the framework.
+I decided to use the modeled RP instead of the empirical because we can (hopefully)
+better match the RPs across the issued months.
+Either way, I still output the empirical RP just to check that we're still triggered for the
+correct years (three per issue month, four overall).
 
 ```python
-da_iri = ds_iri.isel(C=0)["prob"]
-da_iri = da_iri.rio.write_crs(4326)
-```
+def fit_skewnorm_rp(issued_month, rp_fit):
+    # Fit the skewed normal distribution to the 'issued_3' column in df_pivot_recent
+    params = skewnorm.fit(df_pivot_recent[f"issued_{issued_month}"])
 
-```python
-da_iri_clip_low = da_iri.rio.clip(adm1.geometry, all_touched=True)
-```
+    # Generate a range of values for plotting the PDF
+    x = np.linspace(
+        df_pivot_recent[f"issued_{issued_month}"].min() - 1,
+        df_pivot_recent[f"issued_{issued_month}"].max() + 1,
+        1000,
+    )
+    pdf_values = skewnorm.pdf(x, *params)
 
-```python
-da_iri_up = upsample_dataarray(da_iri_clip_low, x_var="X", y_var="Y")
-```
-
-```python
-da_iri_clip = da_iri_up.rio.clip(adm1.geometry)
-```
-
-```python
-da_iri_q = da_iri_clip.quantile(1 - ORIGINAL_Q, dim=["X", "Y"])
-```
-
-```python
-da_iri_q
-```
-
-```python
-df_iri = da_iri_q.to_dataframe("q")["q"].reset_index()
-```
-
-```python
-df_iri["issued_date"] = pd.to_datetime(df_iri["F"].astype(str))
-df_iri["issued_year"] = df_iri["issued_date"].dt.year
-df_iri["issued_month"] = df_iri["issued_date"].dt.month
-```
-
-```python
-df_iri_triggers = df_iri[
-    ((df_iri["issued_month"] == 3) & (df_iri["L"] == 3))
-    | ((df_iri["issued_month"] == 7) & (df_iri["L"] == 1))
-][["issued_year", "issued_month", "q"]].rename(columns={"issued_year": "year"})
-df_iri_triggers
-```
-
-### Plot trend
-
-```python
-df_iri_triggers.pivot(index="year", columns="issued_month", values="q").plot()
-```
-
-```python
-df_iri_triggers
-```
-
-```python
-for issued_month in [3, 7]:
-    dff = df_iri_triggers[df_iri_triggers["issued_month"] == issued_month]
-    X = sm.add_constant(dff.index)
-    model = sm.OLS(dff["q"], X).fit()
-    print(f"issued month {issued_month}")
-    print(model.summary())
-```
-
-```python
-blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/iri/iri_original_trigger_raster_stats.parquet"
-blob_utils.upload_parquet_to_blob(df_iri_triggers, blob_name)
-```
-
-## Comparison
-
-### Plot comparison plots
-
-```python
-df_compare = df_seas5.merge(
-    df_iri_triggers, on=["year", "issued_month"], suffixes=["_seas5", "_iri"]
-)
-```
-
-```python
-x_var = "q_iri"
-y_var = "q_seas5"
-x_color = "darkblue"
-y_color = "green"
-xmin, xmax = 20, 45
-alpha = 0.1
-
-for issued_month, seas5_thresh, trimester in zip(
-    [3, 7], [thresh_3, thresh_7], ["JJA", "ASO"]
-):
-    fig, ax = plt.subplots(dpi=200)
-    dff = df_compare[df_compare["issued_month"] == issued_month]
-
-    for year, row in dff.set_index("year").iterrows():
-        ax.annotate(
-            year,
-            (row[x_var], row[y_var]),
-            va="center",
-            ha="center",
-            fontsize=8,
-            fontweight="bold",
-        )
-
-    y_buffer = (dff[y_var].max() - dff[y_var].min()) * 0.1
-    ymin, ymax = (
-        dff[y_var].min() - y_buffer,
-        dff[y_var].max() + y_buffer,
+    # Create the histogram of the 'issued_3' column
+    plt.figure(figsize=(8, 6))
+    plt.hist(
+        df_pivot_recent[f"issued_{issued_month}"],
+        bins=30,
+        density=True,
+        alpha=0.6,
+        color="g",
+        label="Data Histogram",
     )
 
-    ax.axvline(ORIGINAL_IRI_THRESH, color=x_color)
-    ax.axvspan(ORIGINAL_IRI_THRESH, xmax, facecolor=x_color, alpha=alpha)
-    ax.annotate(
-        " Seuil actuel du cadre",
-        (ORIGINAL_IRI_THRESH, ymin),
-        rotation=90,
-        va="bottom",
-        ha="right",
-        fontsize=8,
-        color=x_color,
+    # Plot the PDF of the fitted skewed normal distribution
+    plt.plot(
+        x, pdf_values, "r-", lw=2, label="Fitted Skewed Normal Distribution"
     )
 
-    ax.axhline(seas5_thresh, color=y_color)
-    ax.axhspan(ymin, seas5_thresh, facecolor=y_color, alpha=alpha)
-    ax.annotate(
-        f" Seuil PR {rp_individual_seas5}-ans = {seas5_thresh:.2f} mm",
-        (xmin, seas5_thresh),
-        va="bottom",
-        ha="left",
-        fontsize=8,
-        color=y_color,
-    )
+    # Add labels and legend
+    plt.title("Goodness of Fit: Skewed Normal Distribution")
+    plt.xlabel(f"issued_{issued_month}")
+    plt.ylabel("Density")
+    plt.legend()
 
-    ax.set_title(
-        "Comparaison des prévisions de "
-        f"{FRENCH_MONTHS.get(calendar.month_abbr[issued_month])} "
-        f"pour {trimester}"
-    )
-    ax.set_ylabel(
-        "Précipitations moyennes sur trimestre,\n"
-        "10e centile sur zone d'intérêt (mm / jour) [SEAS5]"
-    )
-    ax.set_xlabel(
-        f"Probabilité de précipitations inférieures à normale,\n"
-        "90e centile sur zone d'intérêt (%) [IRI]"
-    )
+    # Show the plot
+    plt.show()
 
-    ax.set_xlim((20, xmax))
-    ax.set_ylim((ymin, ymax))
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    thresh = skewnorm.ppf(1 / rp_fit, *params)
+    print(f"thresh for {rp_fit}-yr RP: {thresh}")
+    n_trig_years = len(
+        df_pivot_recent[df_pivot_recent[f"issued_{issued_month}"] <= thresh]
+    )
+    print(f"n years triggered with this thresh: {n_trig_years}")
+    print(
+        f"empirical RP with this thresh: {(len(df_pivot_recent)+1)/n_trig_years}"
+    )
+```
+
+```python
+rp_fit = 7
+```
+
+```python
+fit_skewnorm_rp(3, rp_fit)
+```
+
+```python
+fit_skewnorm_rp(7, rp_fit)
 ```
 
 ```python
