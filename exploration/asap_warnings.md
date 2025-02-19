@@ -465,7 +465,7 @@ df_asap_v_seas5_rp
 ```
 
 ```python
-# this is literally just to make those litlt
+# this is literally just to make those little boxes on the plot
 def plot_grid(x, y, symbol, ax, pitch=0.2):
     grid = np.zeros((2, 2))  # Create a 2x2 grid of empty boxes
     symbol = int(symbol)
@@ -508,18 +508,13 @@ def plot_grid(x, y, symbol, ax, pitch=0.2):
 ```
 
 ```python
-type(df_asap_v_seas5_rp["asap_col"].apply(extract_asap_params))
-```
-
-```python
+# just to check which data points from the plot correspond to which ASAP triggers
 df_asap_v_seas5_rp.sort_values(
     ["rp_com", "rp_asap", "rp_seas5_com", "rp_seas5_ind"], ascending=True
 )
 ```
 
-```python
-df_asap_v_seas5_rp_deduplicated
-```
+### Plot combined RP combinations
 
 ```python
 fig, ax = plt.subplots(figsize=(8, 8), dpi=200)
@@ -579,17 +574,7 @@ ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
 ```
 
-```python
-calendar.month_abbr[1]
-```
-
-```python
-FRENCH_MONTHS[calendar.month_abbr[1]]
-```
-
-```python
-
-```
+### Display combined activations
 
 ```python
 def display_combined_activations(asap_col, rp_seas5_ind):
