@@ -42,6 +42,10 @@ from src.utils import dekad, blob_utils, rp_calc
 # asap.process_asap_warnings()
 ```
 
+## Load pre-filtered data
+
+And do some light processing
+
 ```python
 df_asap = asap.load_processed_asap_warnings()
 ```
@@ -69,6 +73,8 @@ df_asap[
 ].drop_duplicates().sort_values("w_crop")
 ```
 
+Check that the "Warning with exceptional conditions" don't happen too often - looks fine.
+
 ```python
 df_asap["w_crop"].value_counts().plot.bar()
 ```
@@ -80,6 +86,14 @@ all_years = df_asap["date"].dt.year.unique()
 ```python
 all_years
 ```
+
+## Cycle through options
+
+There's various ways to combine the warnings, but I broke it down to:
+
+- either `OR` or `AND` condition to combine crop and range
+- minimum number of admin1s with the alert level
+- minimum alert level
 
 ```python
 # options
@@ -147,6 +161,8 @@ df_triggers[
 ]
 ```
 
+### Calculate return period
+
 ```python
 df_rps = (
     df_triggers.groupby(["crop_range", "minadm1s", "al"])
@@ -157,6 +173,8 @@ df_rps["rp"] = (len(all_years) + 1) / df_rps["count"]
 df_rps = df_rps.sort_values("rp", ascending=False)
 df_rps
 ```
+
+### Plot RP of options
 
 ```python
 lower_rp, upper_rp = 4, 20
@@ -195,6 +213,8 @@ plot_asap_heatmap("OR")
 plot_asap_heatmap("AND")
 ```
 
+### Plot trigger timing of options
+
 ```python
 def plot_asap_heatmap_min_dekad(crop_range):
     crop_range_fr = "OU" if crop_range == "OR" else "ET"
@@ -227,18 +247,16 @@ plot_asap_heatmap_min_dekad("AND")
 ```
 
 ```python
-df_rps_acceptable = df_rps[
-    (df_rps["rp"] >= lower_rp) & (df_rps["rp"] <= upper_rp)
-]
-```
-
-```python
+# set naming structure for ASAP triggers
 ASAP_COL = (
     "Niveau ≥ {al}<br>N. régions ≥ {minadm1s}<br>" "Ag. {crop_range_fr} Pât."
 )
 ```
 
 ```python
+# set up reverse of naming structure
+# in retropsect this could've all been avoided with proper grouping
+# but this works for now
 def extract_asap_params(formatted_string):
     # Define a regular expression pattern to match the expected format, allowing crop_range_fr to be a string
     pattern = r"Niveau ≥ (?P<al>\d+)<br>N\. régions ≥ (?P<minadm1s>\d+)<br>Ag\. (?P<crop_range_fr>[\w\s]+) Pât\."
@@ -255,6 +273,8 @@ def extract_asap_params(formatted_string):
     else:
         raise ValueError("The string does not match the expected format")
 ```
+
+### Check specific years triggered
 
 ```python
 df_asap_yearly = pd.DataFrame(data={"year": range(2001, 2025)})
@@ -330,6 +350,8 @@ display_asap_activations("AND")
 
 ## Combined RP
 
+### Load SEAS5
+
 ```python
 df_seas5 = seas5.load_seas5_stats(variable="zscore")
 ```
@@ -347,6 +369,8 @@ df_seas5_yearly = df_seas5_yearly.rename(
 )
 ```
 
+### Merge with ASAP
+
 ```python
 df_both_yearly = df_seas5_yearly.merge(df_asap_yearly).sort_values(
     "year", ascending=False
@@ -356,6 +380,8 @@ df_both_yearly = df_seas5_yearly.merge(df_asap_yearly).sort_values(
 ```python
 df_both_yearly[ASAP_COL.format(al=4, crop_range_fr="OU", minadm1s=4)]
 ```
+
+Quickly check the individual RP of SEAS5
 
 ```python
 rp_based = False
@@ -382,36 +408,7 @@ for mo in [3, 7]:
 df_both_yearly[["year"] + [f"issued_{mo}_bool" for mo in [3, 7]]]
 ```
 
-```python
-dicts = []
-
-asap_cols = [x for x in df_both_yearly.columns if "Niveau" in x]
-
-for col in asap_cols:
-    n_activated_asap = df_both_yearly[col].sum()
-    n_activated_any = (
-        df_both_yearly[[f"issued_{mo}_bool" for mo in [3, 7]] + [col]]
-        .any(axis=1)
-        .sum()
-    )
-    rp_asap = (len(all_years) + 1) / n_activated_asap
-    rp_any = (len(all_years) + 1) / n_activated_any
-    dicts.append(
-        {
-            "asap_trig": col,
-            "n_activated_asap": n_activated_asap,
-            "n_activated_any": n_activated_any,
-            "rp_asap": rp_asap,
-            "rp_any": rp_any,
-        }
-    )
-
-df_combined_rp = pd.DataFrame(dicts)
-```
-
-```python
-df_combined_rp
-```
+### Determine combined RPs
 
 ```python
 asap_col = ASAP_COL.format(al=2, minadm1s=3, crop_range_fr="ET")
@@ -468,6 +465,7 @@ df_asap_v_seas5_rp
 ```
 
 ```python
+# this is literally just to make those litlt
 def plot_grid(x, y, symbol, ax, pitch=0.2):
     grid = np.zeros((2, 2))  # Create a 2x2 grid of empty boxes
     symbol = int(symbol)
@@ -514,7 +512,9 @@ type(df_asap_v_seas5_rp["asap_col"].apply(extract_asap_params))
 ```
 
 ```python
-df_asap_v_seas5_rp.sort_values("rp_com", ascending=True)
+df_asap_v_seas5_rp.sort_values(
+    ["rp_com", "rp_asap", "rp_seas5_com", "rp_seas5_ind"], ascending=True
+)
 ```
 
 ```python
