@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal
 
 import xarray as xr
 from dask.diagnostics import ProgressBar
@@ -58,7 +58,12 @@ def process_seas5_rasters():
     blob_utils.upload_parquet_to_blob(df_seas5, blob_name)
 
 
-def load_seas5_stats():
-    blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_original_trigger_raster_stats.parquet"  # noqa
+def load_seas5_stats(variable: Literal["zscore", "abs"] = "abs"):
+    if variable == "zscore":
+        blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_zscore_q10.parquet"  # noqa
+    elif variable == "abs":
+        blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_original_trigger_raster_stats.parquet"  # noqa
+    else:
+        raise ValueError(f"Invalid variable {variable}")
     df_seas5 = blob_utils.load_parquet_from_blob(blob_name)
     return df_seas5
