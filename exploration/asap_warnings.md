@@ -87,7 +87,7 @@ all_years = df_asap["date"].dt.year.unique()
 all_years
 ```
 
-## Cycle through options
+## Cycle through ASAP warning options
 
 There's various ways to combine the warnings, but I broke it down to:
 
