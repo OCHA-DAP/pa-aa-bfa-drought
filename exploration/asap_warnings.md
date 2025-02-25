@@ -128,8 +128,6 @@ for crop_range in crop_range_options:
                 ].min(axis=1)
             else:
                 raise ValueError("invalid crop_range")
-            if biomass_only:
-                dff = dff["indicator"]
             dff = dff[dff["indicator"] >= alert_level]
             adm_counts = (
                 dff.groupby("year")
@@ -353,7 +351,7 @@ display_asap_activations("AND")
 ### Load SEAS5
 
 ```python
-df_seas5 = seas5.load_seas5_stats(variable="zscore")
+df_seas5 = seas5.load_seas5_stats(variable="rank")
 ```
 
 ```python
@@ -577,6 +575,10 @@ ax.spines["right"].set_visible(False)
 ### Display combined activations
 
 ```python
+df_both_yearly
+```
+
+```python
 def display_combined_activations(asap_col, rp_seas5_ind):
     df_disp = df_both_yearly.rename(columns={"year": "Année"}).set_index(
         "Année"
@@ -590,6 +592,9 @@ def display_combined_activations(asap_col, rp_seas5_ind):
         print()
         cols.append(col)
     df_disp = df_disp[cols + [asap_col]]
+    print(f"fcast combined rp:")
+    print((len(df_disp) + 1) / df_disp[cols].any(axis=1).sum())
+    print()
     print("asap rp:")
     print((len(df_disp) + 1) / df_disp[asap_col].sum())
     print()
@@ -600,10 +605,19 @@ def display_combined_activations(asap_col, rp_seas5_ind):
 
 ```python
 asap_col = ASAP_COL.format(al=4, minadm1s=1, crop_range_fr="ET")
+display_combined_activations(asap_col, 8)
+```
+
+```python
+asap_col = ASAP_COL.format(al=4, minadm1s=1, crop_range_fr="ET")
 display_combined_activations(asap_col, 7)
 ```
 
 ```python
 asap_col = ASAP_COL.format(al=4, minadm1s=3, crop_range_fr="ET")
 display_combined_activations(asap_col, 5)
+```
+
+```python
+
 ```
