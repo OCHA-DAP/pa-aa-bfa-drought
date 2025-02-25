@@ -182,6 +182,18 @@ def load_csv_from_blob(
     return pd.read_csv(io.BytesIO(blob_data), **kwargs)
 
 
+def load_excel_from_blob(
+    blob_name,
+    stage: Literal["prod", "dev"] = "dev",
+    container_name: str = "projects",
+    **kwargs,
+):
+    blob_data = _load_blob_data(
+        blob_name, stage=stage, container_name=container_name
+    )
+    return pd.read_excel(io.BytesIO(blob_data), **kwargs)
+
+
 def upload_shp_to_blob(gdf, blob_name, stage: Literal["prod", "dev"] = "dev"):
     """
     Upload a GeoDataFrame to Azure Blob Storage as a zipped shapefile.
