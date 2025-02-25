@@ -86,119 +86,142 @@ with ProgressBar():
 da_seas5_mean_computed.isel(issued_month=0).plot()
 ```
 
-### Calculate std dev
+### Calculate anomaly
 
 ```python
-da_seas5_std = da_seas5_clip.std(dim="year")
-```
-
-```python
-da_seas5_std
-```
-
-```python
-with ProgressBar():
-    da_seas5_std_computed = da_seas5_std.compute()
-```
-
-```python
-da_seas5_std_computed.isel(issued_month=0).plot()
-```
-
-```python
-da_seas5_variability = da_seas5_std / da_seas5_mean
+da_seas5_anomaly = (
+    da_seas5_clip - da_seas5_mean_computed
+) / da_seas5_mean_computed
 ```
 
 ```python
 with ProgressBar():
-    da_seas5_variability_computed = da_seas5_variability.compute()
-```
-
-```python
-da_seas5_variability_computed.isel(issued_month=0).plot()
-```
-
-```python
-da_seas5_variability_computed.isel(issued_month=1).plot()
-```
-
-### Calculate Z-score
-
-```python
-da_seas5_zscore = (da_seas5_clip - da_seas5_mean) / da_seas5_std
-```
-
-```python
-with ProgressBar():
-    da_seas5_zscore_computed = da_seas5_zscore.compute()
+    da_seas5_anomaly_computed = da_seas5_anomaly.compute()
 ```
 
 ```python
 fig, ax = plt.subplots(figsize=(8, 4))
-da_seas5_zscore_computed.isel(year=-1, issued_month=1).plot(ax=ax, cmap="RdBu")
+da_seas5_anomaly_computed.isel(year=-1, issued_month=1).plot(
+    ax=ax, cmap="RdBu"
+)
 adm1.boundary.plot(ax=ax, color="k")
 ax.axis("off")
 ```
 
 ```python
-vmin = da_seas5_zscore_computed.sel(year=2019, issued_month=3).min()
-vmax = -vmin
-```
-
-```python
-da_seas5_zscore_computed.sel(year=2015, issued_month=3).plot(
-    vmin=vmin, vmax=vmax, cmap="RdBu"
+da_seas5_anomaly_q = da_seas5_anomaly_computed.quantile(
+    q=ORIGINAL_Q, dim=["x", "y"]
 )
-```
-
-```python
-da_seas5_zscore_computed.sel(year=2019, issued_month=3).plot(
-    vmin=vmin, vmax=vmax, cmap="RdBu"
-)
-```
-
-```python
-da_seas5_zscore_q = da_seas5_zscore.quantile(q=ORIGINAL_Q, dim=["x", "y"])
 ```
 
 ```python
 with ProgressBar():
-    da_seas5_zscore_q_computed = da_seas5_zscore_q.compute()
+    da_seas5_anomaly_q_computed = da_seas5_anomaly_q.compute()
 ```
 
 ```python
-da_seas5_zscore_q_computed.isel(issued_month=0).plot()
+da_seas5_anomaly_q_computed.isel(issued_month=0).plot()
+```
+
+```python
+vmin = da_seas5_anomaly_computed.sel(year=2015, issued_month=3).min()
+vmax = -vmin
+```
+
+```python
+da_seas5_anomaly_computed.sel(year=2015, issued_month=3).plot(
+    vmin=vmin, vmax=vmax, cmap="RdBu"
+)
+```
+
+```python
+da_seas5_anomaly_computed.sel(year=2019, issued_month=3).plot(
+    vmin=vmin, vmax=vmax, cmap="RdBu"
+)
 ```
 
 ### Write to `df` and save to blob
 
 ```python
-df_seas5_zscore_q = da_seas5_zscore_q_computed.to_dataframe("q")[
+df_seas5_anomaly_q = da_seas5_anomaly_q_computed.to_dataframe("q")[
     "q"
 ].reset_index()
 ```
 
 ```python
-df_seas5_zscore_q["q"].hist()
+df_seas5_anomaly_q["q"].hist()
 ```
 
 ```python
-df_seas5_zscore_q["q"].quantile(1 / 3)
+df_seas5_anomaly_q["q"].quantile(1 / 3)
 ```
 
 ```python
-df_seas5_zscore_q
+df_seas5_anomaly_q
 ```
 
 <!-- markdownlint-disable MD013 -->
 
 ```python
-blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_zscore_q10.parquet"  # noqa
-blob_utils.upload_parquet_to_blob(df_seas5_zscore_q, blob_name)
+blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_anomaly_q10.parquet"  # noqa
+blob_utils.upload_parquet_to_blob(df_seas5_anomaly_q, blob_name)
+```
+
+### Calculate percentile
+
+```python
+da_seas5_clip_yearchunk = da_seas5_clip.chunk({"year": -1})
 ```
 
 ```python
-df_seas5 = df_seas5_zscore_q.copy()
+da_seas5_rank = da_seas5_clip_yearchunk.rank(dim="year", pct=True)
+```
+
+```python
+with ProgressBar():
+    da_seas5_rank_computed = da_seas5_rank.compute()
+```
+
+```python
+da_seas5_rank_computed.isel(x=20, y=1, issued_month=0)
+```
+
+```python
+vmin, vmax = 0, 1
+```
+
+```python
+da_seas5_rank_computed.sel(year=2015, issued_month=3).plot(
+    cmap="RdBu", vmin=vmin, vmax=vmax
+)
+```
+
+```python
+da_seas5_rank_computed.sel(year=2019, issued_month=3).plot(
+    cmap="RdBu", vmin=vmin, vmax=vmax
+)
+```
+
+```python
+da_seas5_rank_q = da_seas5_rank.quantile(q=ORIGINAL_Q, dim=["x", "y"])
+```
+
+```python
+with ProgressBar():
+    da_seas5_rank_q_computed = da_seas5_rank_q.compute()
+```
+
+```python
+df_seas5_rank_q = da_seas5_rank_q_computed.to_dataframe("q")["q"].reset_index()
+```
+
+```python
+df_seas5_rank_q["q"].hist()
+```
+
+```python
+blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_rank_q10.parquet"  # noqa
+blob_utils.upload_parquet_to_blob(df_seas5_rank_q, blob_name)
 ```
 
 ## SEAS5
@@ -206,12 +229,75 @@ df_seas5 = df_seas5_zscore_q.copy()
 ### Loading and processing
 
 ```python
-# if needed, process SEAS5 rasters (takes a few minutes)
-# seas5.process_seas5_rasters()
+df_seas5_anomaly = seas5.load_seas5_stats(variable="anomaly")
 ```
 
 ```python
-df_seas5 = seas5.load_seas5_stats(variable="zscore")
+df_seas5_zscore = seas5.load_seas5_stats(variable="zscore")
+```
+
+```python
+df_seas5_rank = seas5.load_seas5_stats(variable="rank")
+```
+
+```python
+# df_seas5 = df_seas5_rank.copy()
+```
+
+```python
+df_seas5_compare = df_seas5_anomaly.merge(
+    df_seas5_zscore,
+    suffixes=("_anomaly", "_zscore"),
+    on=["issued_month", "year"],
+).merge(
+    df_seas5_rank.rename(columns={"q": "q_rank"}), on=["issued_month", "year"]
+)
+df_seas5_compare = df_seas5_compare[df_seas5_compare["year"] >= 2000]
+```
+
+```python
+df_seas5_compare
+```
+
+```python
+df_seas5_compare[[x for x in df_seas5_compare.columns if "q_" in x]].corr()
+```
+
+```python
+df_seas5_compare.plot(x="q_anomaly", y="q_zscore")
+```
+
+```python
+x_var, y_var = "q_zscore", "q_anomaly"
+for mo, group in df_seas5_compare.groupby("issued_month"):
+    fig, ax = plt.subplots()
+    df_seas5_compare.plot(x=x_var, y=y_var, ax=ax, linewidth=0, legend=False)
+    for year, row in group.set_index("year").iterrows():
+        ax.annotate(year, (row[x_var], row[y_var]), fontsize=6)
+    ax.set_ylabel(y_var)
+    ax.set_title(f"issued {mo}")
+```
+
+```python
+x_var, y_var = "q_zscore", "q_rank"
+for mo, group in df_seas5_compare.groupby("issued_month"):
+    fig, ax = plt.subplots()
+    df_seas5_compare.plot(x=x_var, y=y_var, ax=ax, linewidth=0, legend=False)
+    for year, row in group.set_index("year").iterrows():
+        ax.annotate(year, (row[x_var], row[y_var]), fontsize=6)
+    ax.set_ylabel(y_var)
+    ax.set_title(f"issued {mo}")
+```
+
+```python
+x_var, y_var = "q_rank", "q_anomaly"
+for mo, group in df_seas5_compare.groupby("issued_month"):
+    fig, ax = plt.subplots()
+    df_seas5_compare.plot(x=x_var, y=y_var, ax=ax, linewidth=0, legend=False)
+    for year, row in group.set_index("year").iterrows():
+        ax.annotate(year, (row[x_var], row[y_var]), fontsize=6)
+    ax.set_ylabel(y_var)
+    ax.set_title(f"issued {mo}")
 ```
 
 ```python
@@ -227,8 +313,6 @@ df_seas5 = calculate_groups_rp(df_seas5, ["issued_month"])
 ```python
 df_seas5
 ```
-
-### Checking combined RP
 
 ```python
 df_pivot_rps = df_seas5.pivot(
@@ -258,55 +342,6 @@ for rp_3 in rp_list:
             }
         )
 df_rps = pd.DataFrame(dicts)
-```
-
-```python
-heatmap_data = df_rps.pivot(index="rp_7", columns="rp_3", values="rp_overall")
-```
-
-```python
-bounds = [1, 2, 2.5, 3, 4, 5, 6, 10, 1000]
-tick_bounds = bounds[1:-1]
-cmap = plt.cm.Spectral_r
-norm = mcolors.BoundaryNorm(bounds, cmap.N)
-
-fig, ax = plt.subplots(dpi=200, figsize=(8, 8))
-
-sns.heatmap(
-    heatmap_data,
-    annot=False,
-    cmap=cmap,
-    norm=norm,
-    alpha=0.8,
-    cbar_kws={
-        "label": "Période de retour combinée",
-        "ticks": tick_bounds,
-        "shrink": 0.8,
-    },
-    ax=ax,
-)
-ax.invert_yaxis()
-ax.set_aspect("equal", adjustable="box")
-ax.set_title(
-    "Périodes de retour individuelles vs. période de retour combinée,\n"
-    f"prévisions saisonnières SEAS5, depuis {df_seas5['year'].min()}"
-)
-ax.set_xlabel("Mars : période de retour des prévisions")
-ax.set_ylabel("Juillet : période de retour des prévisions")
-
-tick_positions = np.interp(
-    tick_bounds, heatmap_data.columns, range(len(heatmap_data.columns))
-)
-ax.set_xticks(tick_positions)
-ax.set_xticklabels(tick_bounds, rotation=90)
-ax.set_yticks(tick_positions)
-ax.set_yticklabels(tick_bounds)
-
-for x in tick_positions:
-    ax.axvline(x, color="k", alpha=0.5, linewidth=0.5)
-    ax.axhline(x, color="k", alpha=0.5, linewidth=0.5)
-
-plt.show()
 ```
 
 ### Check trend
@@ -361,10 +396,6 @@ df_pivot_recent
 ### Plot historical activations
 
 ```python
-thresh_3, thresh_7
-```
-
-```python
 rp_individual_seas5 = 9
 
 thresh_3 = df_pivot_recent["issued_3"].quantile(1 / rp_individual_seas5)
@@ -377,8 +408,9 @@ rp_overall = (len(df_pivot_recent) + 1) / df_pivot_recent[
 
 fig, ax = plt.subplots(dpi=200, figsize=(6, 6))
 
-min_val = -2.2
-max_val = 1.5
+# min_val = -0.19
+# max_val = 0.11
+min_val, max_val = 0, 1
 xmin = min_val
 xmax = max_val
 ymin = min_val
@@ -444,8 +476,11 @@ ax.spines["right"].set_visible(False)
 Fixing thresholds based on modeled RP (values calculated a few cells down)
 
 ```python
-thresh_3 = -0.9
-thresh_7 = -0.66
+# thresh_3 = -0.9
+# thresh_7 = -0.66
+thresh_3 = 0.2
+thresh_7 = thresh_3
+
 
 rp_overall = (len(df_pivot_recent) + 1) / df_pivot_recent[
     (df_pivot_recent["issued_3"] <= thresh_3)
@@ -454,8 +489,9 @@ rp_overall = (len(df_pivot_recent) + 1) / df_pivot_recent[
 
 fig, ax = plt.subplots(dpi=200, figsize=(6, 6))
 
-min_val = -2.2
-max_val = 1.5
+# min_val = -2.2
+# max_val = 1.5
+min_val, max_val = 0, 1
 xmin = min_val
 xmax = max_val
 ymin = min_val
