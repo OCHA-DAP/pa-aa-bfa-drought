@@ -12,7 +12,7 @@ import xarray as xr
 from azure.storage.blob import ContainerClient, ContentSettings
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
+load_dotenv()
 
 PROD_BLOB_SAS = os.getenv("DS_AZ_BLOB_PROD_SAS")
 DEV_BLOB_SAS = os.getenv("DS_AZ_BLOB_DEV_SAS_WRITE")

@@ -15,9 +15,8 @@ def get_blob_name(
 ):
     specific_path = None
     if data_type == "raw":
-        if data_type == "raw":
-            if variable == "warnings":
-                specific_path = "warnings_ts/warnings_ts.csv"
+        if variable == "warnings":
+            specific_path = "warnings_ts/warnings_ts.csv"
     elif data_type == "processed":
         if variable == "warnings":
             specific_path = "bfa_aoi_adm1_warnings.parquet"

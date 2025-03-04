@@ -52,8 +52,9 @@ df_asap = asap.load_processed_asap_warnings()
 
 ```python
 def get_alert_gr_int(alert_gr_str):
+    str_prefix_removed = alert_gr_str.removeprefix("Warning group ")
     try:
-        return int(alert_gr_str.removeprefix("Warning group "))
+        return int(str_prefix_removed)
     except ValueError:
         return 0
 
@@ -106,7 +107,7 @@ alert_level_options = [1, 2, 3, 4]
 ```python
 # set first possible trigger dekad to 3rd dekad of July
 min_dekad = 21
-# set last possible trigger dekad to 3rd dekad of July
+# set last possible trigger dekad to 3rd dekad of Oct
 max_dekad = 30
 
 df_monitoring = df_asap[
