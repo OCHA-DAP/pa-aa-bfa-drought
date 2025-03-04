@@ -22,12 +22,16 @@ def open_seas5_cog(issued_date_str: str, lt: int):
     )
 
 
-def open_seas5_rasters(mo_lt_combos: List[dict] = None):
+def open_seas5_rasters(
+    mo_lt_combos: List[dict] = None, years: List[int] = None
+):
     if mo_lt_combos is None:
         # set to original IRI framework combinations
         mo_lt_combos = ORIGINAL_MO_LT_COMBOS
+    if years is None:
+        years = range(START_YEAR, END_YEAR + 1)
     das = []
-    for year in tqdm(range(START_YEAR, END_YEAR + 1)):
+    for year in tqdm(years):
         for mo_lt_combo in mo_lt_combos:
             mo = mo_lt_combo["mo"]
             for lt in mo_lt_combo["lts"]:
