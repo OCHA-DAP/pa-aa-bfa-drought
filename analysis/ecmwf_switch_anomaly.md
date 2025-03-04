@@ -30,6 +30,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from matplotlib.ticker import FuncFormatter
 import numpy as np
 import statsmodels.api as sm
 from dask.diagnostics import ProgressBar
@@ -241,10 +242,6 @@ df_seas5_rank = seas5.load_seas5_stats(variable="rank")
 ```
 
 ```python
-# df_seas5 = df_seas5_rank.copy()
-```
-
-```python
 df_seas5_compare = df_seas5_anomaly.merge(
     df_seas5_zscore,
     suffixes=("_anomaly", "_zscore"),
@@ -260,7 +257,8 @@ df_seas5_compare
 ```
 
 ```python
-df_seas5_compare[[x for x in df_seas5_compare.columns if "q_" in x]].corr()
+for mo, group in df_seas5_compare.groupby("issued_month"):
+    display(group[[x for x in df_seas5_compare.columns if "q_" in x]].corr())
 ```
 
 ```python
@@ -301,6 +299,10 @@ for mo, group in df_seas5_compare.groupby("issued_month"):
 ```
 
 ```python
+df_seas5 = df_seas5_rank.copy()
+```
+
+```python
 # just check the histogram to see that it's sensible
 for issued_month, group in df_seas5.groupby("issued_month"):
     group["q"].hist(alpha=0.3)
@@ -308,10 +310,6 @@ for issued_month, group in df_seas5.groupby("issued_month"):
 
 ```python
 df_seas5 = calculate_groups_rp(df_seas5, ["issued_month"])
-```
-
-```python
-df_seas5
 ```
 
 ```python
@@ -371,7 +369,7 @@ positive. So we can try to filter to more recent years to hopefully
 make it trendless.
 
 ```python
-min_year = 2000
+min_year = 2001
 df_pivot_recent = df_pivot[df_pivot["year"] >= min_year]
 ```
 
@@ -500,10 +498,12 @@ ymax = max_val
 alpha = 0.1
 
 color_3 = "darkorange"
+color_7 = "rebeccapurple"
+
 ax.axvline(thresh_3, color=color_3)
 ax.axvspan(xmin=xmin, xmax=thresh_3, facecolor=color_3, alpha=alpha)
 ax.annotate(
-    f" Seuil fixe = {thresh_3:.2f}",
+    f" Seuil = {thresh_3* 100:.0f}e",
     (thresh_3, ymin),
     rotation=90,
     ha="right",
@@ -512,120 +512,63 @@ ax.annotate(
     color=color_3,
 )
 
-color_7 = "rebeccapurple"
 ax.axhline(thresh_7, color=color_7)
 ax.axhspan(ymin=ymin, ymax=thresh_7, facecolor=color_7, alpha=alpha)
 ax.annotate(
-    f" Seuil fixe = {thresh_7:.2f}",
+    f" Seuil = {thresh_7* 100:.0f}e",
     (xmin, thresh_7),
     ha="left",
     va="bottom",
-    fontsize=8,
+    fontsize=10,
     color=color_7,
 )
 
 for year, row in df_pivot_recent.set_index("year").iterrows():
+    if (row["issued_3"] < thresh_3) & (row["issued_7"] < thresh_7):
+        color = "black"
+    elif row["issued_3"] < thresh_3:
+        color = color_3
+    elif row["issued_7"] < thresh_7:
+        color = color_7
+    else:
+        color = "grey"
     ax.annotate(
         year,
         (row["issued_3"], row["issued_7"]),
         va="center",
         ha="center",
-        fontsize=6,
+        fontsize=8,
         fontweight="bold",
+        color=color,
     )
 
 ax.set_xlim((xmin, xmax))
 ax.set_ylim((ymin, ymax))
 
+
+# Custom formatter for the ticks
+def custom_percentage_formatter(x, pos):
+    return f"{x * 100:.0f}e"  # Multiplies by 100 and appends 'e'
+
+
+ax.xaxis.set_major_formatter(FuncFormatter(custom_percentage_formatter))
+ax.yaxis.set_major_formatter(FuncFormatter(custom_percentage_formatter))
+
 ax.set_xlabel(
-    "Prévision de mars : z-score précipitations JJA,\n"
+    "Prévision de mars : centile historique des précipitations JJA,\n"
     "10e centile sur la zone d'intérêt"
 )
 ax.set_ylabel(
-    "Prévision de juillet : z-score précipitations JJA,\n"
+    "Prévision de juillet : centile historique des précipitations JJA,\n"
     "10e centile sur la zone d'intérêt"
 )
 ax.set_title(
     f"Déclenchements historiques des prévisions SEAS, depuis {min_year}\n"
-    f"(période de retour combinée = {rp_overall:.2f} ans)"
+    f"(période de retour combinée = {rp_overall:.2f} ans)".replace(".", ",")
 )
 
 ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
-```
-
-### Model RP
-
-Modeling the RP using a skew normal distribution.
-To me this seems reasonable, since the Z-scores are probably roughly normally distributed,
-since we're not too close to zero.
-But then, things get skewed because we're taking the 10th quantile.
-
-Anyways, these are the values that are used in the framework.
-I decided to use the modeled RP instead of the empirical because we can (hopefully)
-better match the RPs across the issued months.
-Either way, I still output the empirical RP just to check that we're still triggered for the
-correct years (three per issue month, four overall).
-
-```python
-def fit_skewnorm_rp(issued_month, rp_fit):
-    # Fit the skewed normal distribution to the 'issued_3' column in df_pivot_recent
-    params = skewnorm.fit(df_pivot_recent[f"issued_{issued_month}"])
-
-    # Generate a range of values for plotting the PDF
-    x = np.linspace(
-        df_pivot_recent[f"issued_{issued_month}"].min() - 1,
-        df_pivot_recent[f"issued_{issued_month}"].max() + 1,
-        1000,
-    )
-    pdf_values = skewnorm.pdf(x, *params)
-
-    # Create the histogram of the 'issued_3' column
-    plt.figure(figsize=(8, 6))
-    plt.hist(
-        df_pivot_recent[f"issued_{issued_month}"],
-        bins=30,
-        density=True,
-        alpha=0.6,
-        color="g",
-        label="Data Histogram",
-    )
-
-    # Plot the PDF of the fitted skewed normal distribution
-    plt.plot(
-        x, pdf_values, "r-", lw=2, label="Fitted Skewed Normal Distribution"
-    )
-
-    # Add labels and legend
-    plt.title("Goodness of Fit: Skewed Normal Distribution")
-    plt.xlabel(f"issued_{issued_month}")
-    plt.ylabel("Density")
-    plt.legend()
-
-    # Show the plot
-    plt.show()
-
-    thresh = skewnorm.ppf(1 / rp_fit, *params)
-    print(f"thresh for {rp_fit}-yr RP: {thresh}")
-    n_trig_years = len(
-        df_pivot_recent[df_pivot_recent[f"issued_{issued_month}"] <= thresh]
-    )
-    print(f"n years triggered with this thresh: {n_trig_years}")
-    print(
-        f"empirical RP with this thresh: {(len(df_pivot_recent)+1)/n_trig_years}"
-    )
-```
-
-```python
-rp_fit = 7
-```
-
-```python
-fit_skewnorm_rp(3, rp_fit)
-```
-
-```python
-fit_skewnorm_rp(7, rp_fit)
 ```
 
 ```python

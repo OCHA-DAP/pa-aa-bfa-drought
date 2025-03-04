@@ -305,8 +305,14 @@ df_triggers[
 
 ```python
 def highlight_true(value):
-    if isinstance(value, bool) and value is True:
-        return "background-color: crimson"
+    if isinstance(value, bool) and value is True or value == "Activation":
+        return "background-color: crimson; color: white"
+    elif (
+        isinstance(value, bool)
+        and value is False
+        or value == "Pas d'activation"
+    ):
+        return "color: lightgrey"
     else:
         return ""
 
@@ -600,7 +606,11 @@ def display_combined_activations(asap_col, rp_seas5_ind):
     print()
     print("combined rp:")
     print((len(df_disp) + 1) / df_disp.any(axis=1).sum())
-    display(df_disp.style.map(highlight_true))
+    display(
+        df_disp.replace(
+            {True: "Activation", False: "Pas d'activation"}
+        ).style.map(highlight_true)
+    )
 ```
 
 ```python
