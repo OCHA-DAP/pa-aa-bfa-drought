@@ -13,9 +13,11 @@ jupyter:
     name: pa-aa-bfa-drought
 ---
 
-# ECMWF z-score
+# ECMWF anomaly and rank
 
-Doing the same thing as in `ecmwf_switch` but with Z-score
+Doing the same thing as in `ecmwf_switch` but with anomaly and rank
+
+<!-- markdownlint-disable MD013 -->
 
 ```python
 %load_ext jupyter_black
@@ -47,7 +49,7 @@ from src.constants import *
 adm1 = codab.load_codab_from_blob(admin_level=1, aoi_only=True)
 ```
 
-## Process Z-score
+## Process anomaly
 
 ```python
 da_seas5 = seas5.open_seas5_rasters()
@@ -168,7 +170,7 @@ blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_anomaly_q10.parq
 blob_utils.upload_parquet_to_blob(df_seas5_anomaly_q, blob_name)
 ```
 
-### Calculate percentile
+## Process rank/percentile
 
 ```python
 da_seas5_clip_yearchunk = da_seas5_clip.chunk({"year": -1})
@@ -225,7 +227,7 @@ blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_rank_q10.parquet
 blob_utils.upload_parquet_to_blob(df_seas5_rank_q, blob_name)
 ```
 
-## SEAS5
+## SEAS5 thresholds
 
 ### Loading and processing
 
@@ -255,6 +257,11 @@ df_seas5_compare = df_seas5_compare[df_seas5_compare["year"] >= 2000]
 ```python
 df_seas5_compare
 ```
+
+Quick comparison of the three metrics shows high correlation as expected.
+
+Seems like (and I have no clue how significant this is) Z-score is a bit closer to anomaly than rank.
+And both rank and anomaly are closer to Z-score than to each other.
 
 ```python
 for mo, group in df_seas5_compare.groupby("issued_month"):
@@ -297,6 +304,11 @@ for mo, group in df_seas5_compare.groupby("issued_month"):
     ax.set_ylabel(y_var)
     ax.set_title(f"issued {mo}")
 ```
+
+Next cell proceeds with rest of calculations using rank.
+
+This is selected purely because it can argued that it's closest in meaning to the original trigger (tercile forecast), since the output is a percentile.
+I think, this also fits best with the overall intent of the framework- to capture the worst historical years. The cleanest way to do that in my mind is to just take the historical rank (in percentile form), and avoids the issues of having to make any assumptions about the distribution.
 
 ```python
 df_seas5 = df_seas5_rank.copy()
@@ -471,7 +483,11 @@ ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
 ```
 
-Fixing thresholds based on modeled RP (values calculated a few cells down)
+Fixing thresholds based on proposed values for framework. We are fixing the same value for both months for a couple reasons:
+
+- We can't really say whether the spatial quantile values we're plotting have a different distribution from issue month to issue month, so it doesn't really make sense to fix the threshold independently for each one.
+- Having the same threshold for each month is just easier to remember and easier to explain.
+- Also, conveniently, the threshold that corresponds to the requested forecast RP (around 6 years combined), is 20th, which is the lower quintile
 
 ```python
 # thresh_3 = -0.9
