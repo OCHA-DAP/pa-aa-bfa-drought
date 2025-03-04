@@ -361,10 +361,6 @@ df_pivot_recent
 ### Plot historical activations
 
 ```python
-thresh_3, thresh_7
-```
-
-```python
 rp_individual_seas5 = 9
 
 thresh_3 = df_pivot_recent["issued_3"].quantile(1 / rp_individual_seas5)
@@ -441,7 +437,9 @@ ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
 ```
 
-Fixing thresholds based on modeled RP (values calculated a few cells down)
+Fixing thresholds based on modeled RP (values calculated a few cells down),
+which were then rounded for proposal to working group,
+hence being hard-coded here.
 
 ```python
 thresh_3 = -0.9
