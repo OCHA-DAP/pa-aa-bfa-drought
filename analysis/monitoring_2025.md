@@ -119,7 +119,7 @@ da_seas5_historical_computed
 
 ### Calculate pixel-wise percentile
 
-Note that this excludes the current year from the percentile calculation, so the distribution doesn't change between monitoring years.
+Note that this excludes the current year from the percentile calculation (provided that the current year is not within the reference period 1981-2024), so the distribution doesn't change between monitoring years.
 
 ```python
 # count the years where value is less than or equal to current value
