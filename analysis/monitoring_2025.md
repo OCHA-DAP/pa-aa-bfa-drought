@@ -212,12 +212,27 @@ adm1.boundary.plot(ax=ax, color="k", linewidth=0.5)
 
 ax.set_title(
     f"Prévisions SEAS5 publiées en {mo_fr} {year} pour {v_mo_fr},\n"
-    "centile historique (années références 1981-2024)\n\n"
-    f"Fraction de avec centile < 20 = {frac_area_triggering:.1f}"
+    "centile historique (années références 1981-2024)"
 )
 
-# for cbar in ax.collections:
-#     cbar.remove()
+bottom_text = (
+    f"Fraction de avec centile < {THRESH*100:.0f} = {frac_area_triggering:.1f}"
+)
+
+# Add the bottom text with smaller font, italicized
+ax.text(
+    0.5,
+    -0.1,
+    bottom_text,
+    ha="center",
+    va="bottom",
+    transform=ax.transAxes,
+    fontsize=10,
+    style="italic",
+    color="black",
+)
+
+
 cbar = plt.colorbar(
     ax.collections[0], ax=ax, norm=norm, cmap=cmap, boundaries=boundaries
 )
@@ -243,4 +258,8 @@ da_check = da_seas5_historical_ranks.sel(year=year) == da_current_percentile
 ```python
 # check by plotting- values match everywhere
 da_check.plot()
+```
+
+```python
+
 ```
