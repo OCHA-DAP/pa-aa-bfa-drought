@@ -61,7 +61,7 @@ Set `window` based on monitoring window (1 is March, 2 is July).
 
 ```python
 window = 1
-year = 2024
+year = 2025
 ```
 
 ```python
@@ -212,7 +212,7 @@ adm1.boundary.plot(ax=ax, color="k", linewidth=0.5)
 
 ax.set_title(
     f"Prévisions SEAS5 publiées en {mo_fr} {year} pour {v_mo_fr},\n"
-    "centile historique (années références 1981-2024)"
+    "centile historique des précipitations totales (années références 1981-2024)"
 )
 
 bottom_text = (
