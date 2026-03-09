@@ -14,8 +14,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PROD_BLOB_SAS = os.getenv("DS_AZ_BLOB_PROD_SAS")
-DEV_BLOB_SAS = os.getenv("DS_AZ_BLOB_DEV_SAS_WRITE")
+PROD_BLOB_SAS = os.getenv("DSCI_AZ_BLOB_PROD_SAS")
+DEV_BLOB_SAS = os.getenv("DSCI_AZ_BLOB_DEV_SAS_WRITE")
 
 DS_AZ_BLOB_DEV_HOST = "imb0chd0dev.blob.core.windows.net"
 DS_AZ_BLOB_PROD_HOST = "imb0chd0prod.blob.core.windows.net"

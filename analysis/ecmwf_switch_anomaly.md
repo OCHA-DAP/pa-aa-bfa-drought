@@ -511,7 +511,7 @@ xmax = max_val
 ymin = min_val
 ymax = max_val
 
-alpha = 0.1
+alpha = 0.2
 
 color_3 = "darkorange"
 color_7 = "rebeccapurple"
@@ -535,7 +535,7 @@ ax.annotate(
     (xmin, thresh_7),
     ha="left",
     va="bottom",
-    fontsize=10,
+    fontsize=8,
     color=color_7,
 )
 
@@ -575,7 +575,7 @@ ax.set_xlabel(
     "10e centile sur la zone d'intérêt"
 )
 ax.set_ylabel(
-    "Prévision de juillet : centile historique des précipitations JJA,\n"
+    "Prévision de juillet : centile historique des précipitations ASO,\n"
     "10e centile sur la zone d'intérêt"
 )
 ax.set_title(
@@ -585,6 +585,14 @@ ax.set_title(
 
 ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
+```
+
+```python
+(2024 - 2001 + 1) * 2
+```
+
+```python
+((2024 - 2001 + 1) * 2 + 1) / 5
 ```
 
 ```python
