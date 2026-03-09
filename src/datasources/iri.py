@@ -8,4 +8,7 @@ IRI_RAW_DIR = DATA_DIR / "public" / "raw" / "glb" / "iri"
 
 
 def load_raw_iri():
-    return xr.open_dataset(IRI_RAW_DIR / "iri.nc", decode_times=False)
+    ds = xr.open_dataset(IRI_RAW_DIR / "iri.nc", decode_times=False)
+    ds["F"].attrs["calendar"] = "360_day"
+    ds = xr.decode_cf(ds)
+    return ds

@@ -1,4 +1,5 @@
 """Class to download and load CMORPH SPI data."""
+
 import logging
 import ssl
 from abc import abstractmethod
