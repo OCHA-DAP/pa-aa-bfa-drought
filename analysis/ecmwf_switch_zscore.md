@@ -1,0 +1,595 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,md
+    text_representation:
+      extension: .md
+      format_name: markdown
+      format_version: '1.3'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: pa-aa-bfa-drought
+    language: python
+    name: pa-aa-bfa-drought
+---
+
+# ECMWF z-score
+
+Doing the same thing as in `ecmwf_switch` but with Z-score
+
+```python
+%load_ext jupyter_black
+%load_ext autoreload
+%autoreload 2
+```
+
+```python
+import calendar
+
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import numpy as np
+import statsmodels.api as sm
+from dask.diagnostics import ProgressBar
+from scipy.stats import skewnorm
+
+from src.datasources import seas5, iri, codab
+from src.utils.raster import upsample_dataarray
+from src.utils.rp_calc import calculate_groups_rp
+from src.utils import blob_utils
+from src.constants import *
+```
+
+```python
+adm1 = codab.load_codab_from_blob(admin_level=1, aoi_only=True)
+```
+
+## Process Z-score
+
+```python
+da_seas5 = seas5.open_seas5_rasters()
+```
+
+```python
+da_seas5_tri = da_seas5.mean(dim="lt")
+da_seas5_up = upsample_dataarray(da_seas5_tri)
+da_seas5_clip = da_seas5_up.rio.clip(adm1.geometry)
+```
+
+```python
+da_seas5_clip
+```
+
+```python
+fig, ax = plt.subplots(figsize=(8, 4))
+da_seas5_clip.isel(year=-1, issued_month=1).plot(ax=ax, cmap="RdBu")
+adm1.boundary.plot(ax=ax, color="k")
+ax.axis("off")
+```
+
+### Calculate mean
+
+Computing and plotting things as I go just to ensure they look sensible.
+
+```python
+da_seas5_mean = da_seas5_clip.mean(dim="year")
+```
+
+```python
+with ProgressBar():
+    da_seas5_mean_computed = da_seas5_mean.compute()
+```
+
+```python
+da_seas5_mean_computed.isel(issued_month=0).plot()
+```
+
+### Calculate std dev
+
+```python
+da_seas5_std = da_seas5_clip.std(dim="year")
+```
+
+```python
+da_seas5_std
+```
+
+```python
+with ProgressBar():
+    da_seas5_std_computed = da_seas5_std.compute()
+```
+
+```python
+da_seas5_std_computed.isel(issued_month=0).plot()
+```
+
+```python
+da_seas5_variability = da_seas5_std / da_seas5_mean
+```
+
+```python
+with ProgressBar():
+    da_seas5_variability_computed = da_seas5_variability.compute()
+```
+
+```python
+da_seas5_variability_computed.isel(issued_month=0).plot()
+```
+
+```python
+da_seas5_variability_computed.isel(issued_month=1).plot()
+```
+
+### Calculate Z-score
+
+```python
+da_seas5_zscore = (da_seas5_clip - da_seas5_mean) / da_seas5_std
+```
+
+```python
+with ProgressBar():
+    da_seas5_zscore_computed = da_seas5_zscore.compute()
+```
+
+```python
+fig, ax = plt.subplots(figsize=(8, 4))
+da_seas5_zscore_computed.isel(year=-1, issued_month=1).plot(ax=ax, cmap="RdBu")
+adm1.boundary.plot(ax=ax, color="k")
+ax.axis("off")
+```
+
+```python
+vmin = da_seas5_zscore_computed.sel(year=2019, issued_month=3).min()
+vmax = -vmin
+```
+
+```python
+da_seas5_zscore_computed.sel(year=2015, issued_month=3).plot(
+    vmin=vmin, vmax=vmax, cmap="RdBu"
+)
+```
+
+```python
+da_seas5_zscore_computed.sel(year=2019, issued_month=3).plot(
+    vmin=vmin, vmax=vmax, cmap="RdBu"
+)
+```
+
+```python
+da_seas5_zscore_q = da_seas5_zscore.quantile(q=ORIGINAL_Q, dim=["x", "y"])
+```
+
+```python
+with ProgressBar():
+    da_seas5_zscore_q_computed = da_seas5_zscore_q.compute()
+```
+
+```python
+da_seas5_zscore_q_computed.isel(issued_month=0).plot()
+```
+
+### Write to `df` and save to blob
+
+```python
+df_seas5_zscore_q = da_seas5_zscore_q_computed.to_dataframe("q")[
+    "q"
+].reset_index()
+```
+
+```python
+df_seas5_zscore_q["q"].hist()
+```
+
+```python
+df_seas5_zscore_q["q"].quantile(1 / 3)
+```
+
+```python
+df_seas5_zscore_q
+```
+
+<!-- markdownlint-disable MD013 -->
+
+```python
+blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_zscore_q10.parquet"  # noqa
+blob_utils.upload_parquet_to_blob(df_seas5_zscore_q, blob_name)
+```
+
+```python
+df_seas5 = df_seas5_zscore_q.copy()
+```
+
+## SEAS5
+
+### Loading and processing
+
+```python
+# if needed, process SEAS5 rasters (takes a few minutes)
+# seas5.process_seas5_rasters()
+```
+
+```python
+df_seas5 = seas5.load_seas5_stats(variable="zscore")
+```
+
+```python
+# just check the histogram to see that it's sensible
+for issued_month, group in df_seas5.groupby("issued_month"):
+    group["q"].hist(alpha=0.3)
+```
+
+```python
+df_seas5 = calculate_groups_rp(df_seas5, ["issued_month"])
+```
+
+```python
+df_seas5
+```
+
+### Checking combined RP
+
+```python
+df_pivot_rps = df_seas5.pivot(
+    index="year", columns="issued_month", values="q_rp"
+).reset_index()
+df_pivot_rps = df_pivot_rps.rename(columns={x: f"issued_{x}" for x in [3, 7]})
+```
+
+```python
+dicts = []
+min_individual_rp = 2
+
+rp_list = df_seas5["q_rp"].unique()
+rp_list = rp_list[rp_list >= min_individual_rp]
+for rp_3 in rp_list:
+    for rp_7 in rp_list:
+        dff = df_pivot_rps[
+            (df_pivot_rps["issued_3"] >= rp_3)
+            | (df_pivot_rps["issued_7"] >= rp_7)
+        ]
+        dicts.append(
+            {
+                "rp_3": rp_3,
+                "rp_7": rp_7,
+                "rp_overall": (df_seas5["year"].nunique() + 1)
+                / dff["year"].nunique(),
+            }
+        )
+df_rps = pd.DataFrame(dicts)
+```
+
+```python
+heatmap_data = df_rps.pivot(index="rp_7", columns="rp_3", values="rp_overall")
+```
+
+```python
+bounds = [1, 2, 2.5, 3, 4, 5, 6, 10, 1000]
+tick_bounds = bounds[1:-1]
+cmap = plt.cm.Spectral_r
+norm = mcolors.BoundaryNorm(bounds, cmap.N)
+
+fig, ax = plt.subplots(dpi=200, figsize=(8, 8))
+
+sns.heatmap(
+    heatmap_data,
+    annot=False,
+    cmap=cmap,
+    norm=norm,
+    alpha=0.8,
+    cbar_kws={
+        "label": "Période de retour combinée",
+        "ticks": tick_bounds,
+        "shrink": 0.8,
+    },
+    ax=ax,
+)
+ax.invert_yaxis()
+ax.set_aspect("equal", adjustable="box")
+ax.set_title(
+    "Périodes de retour individuelles vs. période de retour combinée,\n"
+    f"prévisions saisonnières SEAS5, depuis {df_seas5['year'].min()}"
+)
+ax.set_xlabel("Mars : période de retour des prévisions")
+ax.set_ylabel("Juillet : période de retour des prévisions")
+
+tick_positions = np.interp(
+    tick_bounds, heatmap_data.columns, range(len(heatmap_data.columns))
+)
+ax.set_xticks(tick_positions)
+ax.set_xticklabels(tick_bounds, rotation=90)
+ax.set_yticks(tick_positions)
+ax.set_yticklabels(tick_bounds)
+
+for x in tick_positions:
+    ax.axvline(x, color="k", alpha=0.5, linewidth=0.5)
+    ax.axhline(x, color="k", alpha=0.5, linewidth=0.5)
+
+plt.show()
+```
+
+### Check trend
+
+```python
+df_pivot = df_seas5.pivot(
+    index="year", columns="issued_month", values="q"
+).reset_index()
+df_pivot = df_pivot.rename(columns={x: f"issued_{x}" for x in [3, 7]})
+```
+
+```python
+df_pivot.plot(x="year", y=["issued_3", "issued_7"])
+```
+
+```python
+for issued_month in [3, 7]:
+    X = sm.add_constant(df_pivot.index)
+    model = sm.OLS(df_pivot[f"issued_{issued_month}"], X).fit()
+    print(f"issued month {issued_month}")
+    print(model.summary())
+```
+
+Same as for absolute values -
+as a crude check, we see that the confidence intervals for the slope are
+positive. So we can try to filter to more recent years to hopefully
+make it trendless.
+
+```python
+min_year = 2000
+df_pivot_recent = df_pivot[df_pivot["year"] >= min_year]
+```
+
+```python
+df_pivot_recent.plot(x="year", y=["issued_3", "issued_7"])
+```
+
+```python
+for issued_month in [3, 7]:
+    X = sm.add_constant(df_pivot_recent.index)
+    model = sm.OLS(df_pivot_recent[f"issued_{issued_month}"], X).fit()
+    print(f"issued month {issued_month}")
+    print(model.summary())
+```
+
+Confidence intervals of slope span 0 now, so we're good.
+
+```python
+df_pivot_recent
+```
+
+### Plot historical activations
+
+```python
+rp_individual_seas5 = 9
+
+thresh_3 = df_pivot_recent["issued_3"].quantile(1 / rp_individual_seas5)
+thresh_7 = df_pivot_recent["issued_7"].quantile(1 / rp_individual_seas5)
+
+rp_overall = (len(df_pivot_recent) + 1) / df_pivot_recent[
+    (df_pivot_recent["issued_3"] <= thresh_3)
+    | (df_pivot_recent["issued_7"] <= thresh_7)
+]["year"].nunique()
+
+fig, ax = plt.subplots(dpi=200, figsize=(6, 6))
+
+min_val = -2.2
+max_val = 1.5
+xmin = min_val
+xmax = max_val
+ymin = min_val
+ymax = max_val
+
+alpha = 0.1
+
+color_3 = "darkorange"
+ax.axvline(thresh_3, color=color_3)
+ax.axvspan(xmin=xmin, xmax=thresh_3, facecolor=color_3, alpha=alpha)
+ax.annotate(
+    f" Seuil PR {rp_individual_seas5}-ans = {thresh_3:.2f}",
+    (thresh_3, ymin),
+    rotation=90,
+    ha="right",
+    va="bottom",
+    fontsize=8,
+    color=color_3,
+)
+
+color_7 = "rebeccapurple"
+ax.axhline(thresh_7, color=color_7)
+ax.axhspan(ymin=ymin, ymax=thresh_7, facecolor=color_7, alpha=alpha)
+ax.annotate(
+    f" Seuil PR {rp_individual_seas5}-ans = {thresh_7:.2f}",
+    (xmin, thresh_7),
+    ha="left",
+    va="bottom",
+    fontsize=8,
+    color=color_7,
+)
+
+for year, row in df_pivot_recent.set_index("year").iterrows():
+    ax.annotate(
+        year,
+        (row["issued_3"], row["issued_7"]),
+        va="center",
+        ha="center",
+        fontsize=6,
+        fontweight="bold",
+    )
+
+ax.set_xlim((xmin, xmax))
+ax.set_ylim((ymin, ymax))
+
+ax.set_xlabel(
+    "Prévision de mars : z-score précipitations JJA,\n"
+    "10e centile sur la zone d'intérêt"
+)
+ax.set_ylabel(
+    "Prévision de juillet : z-score précipitations JJA,\n"
+    "10e centile sur la zone d'intérêt"
+)
+ax.set_title(
+    f"Déclenchements historiques des prévisions SEAS, depuis {min_year}\n"
+    f"(période de retour combinée = {rp_overall:.2f} ans)"
+)
+
+ax.spines["top"].set_visible(False)
+ax.spines["right"].set_visible(False)
+```
+
+Fixing thresholds based on modeled RP (values calculated a few cells down),
+which were then rounded for proposal to working group,
+hence being hard-coded here.
+
+```python
+thresh_3 = -0.9
+thresh_7 = -0.66
+
+rp_overall = (len(df_pivot_recent) + 1) / df_pivot_recent[
+    (df_pivot_recent["issued_3"] <= thresh_3)
+    | (df_pivot_recent["issued_7"] <= thresh_7)
+]["year"].nunique()
+
+fig, ax = plt.subplots(dpi=200, figsize=(6, 6))
+
+min_val = -2.2
+max_val = 1.5
+xmin = min_val
+xmax = max_val
+ymin = min_val
+ymax = max_val
+
+alpha = 0.1
+
+color_3 = "darkorange"
+ax.axvline(thresh_3, color=color_3)
+ax.axvspan(xmin=xmin, xmax=thresh_3, facecolor=color_3, alpha=alpha)
+ax.annotate(
+    f" Seuil fixe = {thresh_3:.2f}",
+    (thresh_3, ymin),
+    rotation=90,
+    ha="right",
+    va="bottom",
+    fontsize=8,
+    color=color_3,
+)
+
+color_7 = "rebeccapurple"
+ax.axhline(thresh_7, color=color_7)
+ax.axhspan(ymin=ymin, ymax=thresh_7, facecolor=color_7, alpha=alpha)
+ax.annotate(
+    f" Seuil fixe = {thresh_7:.2f}",
+    (xmin, thresh_7),
+    ha="left",
+    va="bottom",
+    fontsize=8,
+    color=color_7,
+)
+
+for year, row in df_pivot_recent.set_index("year").iterrows():
+    ax.annotate(
+        year,
+        (row["issued_3"], row["issued_7"]),
+        va="center",
+        ha="center",
+        fontsize=6,
+        fontweight="bold",
+    )
+
+ax.set_xlim((xmin, xmax))
+ax.set_ylim((ymin, ymax))
+
+ax.set_xlabel(
+    "Prévision de mars : z-score précipitations JJA,\n"
+    "10e centile sur la zone d'intérêt"
+)
+ax.set_ylabel(
+    "Prévision de juillet : z-score précipitations JJA,\n"
+    "10e centile sur la zone d'intérêt"
+)
+ax.set_title(
+    f"Déclenchements historiques des prévisions SEAS, depuis {min_year}\n"
+    f"(période de retour combinée = {rp_overall:.2f} ans)"
+)
+
+ax.spines["top"].set_visible(False)
+ax.spines["right"].set_visible(False)
+```
+
+### Model RP
+
+Modeling the RP using a skew normal distribution.
+To me this seems reasonable, since the Z-scores are probably roughly normally distributed,
+since we're not too close to zero.
+But then, things get skewed because we're taking the 10th quantile.
+
+Anyways, these are the values that are used in the framework.
+I decided to use the modeled RP instead of the empirical because we can (hopefully)
+better match the RPs across the issued months.
+Either way, I still output the empirical RP just to check that we're still triggered for the
+correct years (three per issue month, four overall).
+
+```python
+def fit_skewnorm_rp(issued_month, rp_fit):
+    # Fit the skewed normal distribution to the 'issued_3' column in df_pivot_recent
+    params = skewnorm.fit(df_pivot_recent[f"issued_{issued_month}"])
+
+    # Generate a range of values for plotting the PDF
+    x = np.linspace(
+        df_pivot_recent[f"issued_{issued_month}"].min() - 1,
+        df_pivot_recent[f"issued_{issued_month}"].max() + 1,
+        1000,
+    )
+    pdf_values = skewnorm.pdf(x, *params)
+
+    # Create the histogram of the 'issued_3' column
+    plt.figure(figsize=(8, 6))
+    plt.hist(
+        df_pivot_recent[f"issued_{issued_month}"],
+        bins=30,
+        density=True,
+        alpha=0.6,
+        color="g",
+        label="Data Histogram",
+    )
+
+    # Plot the PDF of the fitted skewed normal distribution
+    plt.plot(
+        x, pdf_values, "r-", lw=2, label="Fitted Skewed Normal Distribution"
+    )
+
+    # Add labels and legend
+    plt.title("Goodness of Fit: Skewed Normal Distribution")
+    plt.xlabel(f"issued_{issued_month}")
+    plt.ylabel("Density")
+    plt.legend()
+
+    # Show the plot
+    plt.show()
+
+    thresh = skewnorm.ppf(1 / rp_fit, *params)
+    print(f"thresh for {rp_fit}-yr RP: {thresh}")
+    n_trig_years = len(
+        df_pivot_recent[df_pivot_recent[f"issued_{issued_month}"] <= thresh]
+    )
+    print(f"n years triggered with this thresh: {n_trig_years}")
+    print(
+        f"empirical RP with this thresh: {(len(df_pivot_recent)+1)/n_trig_years}"
+    )
+```
+
+```python
+rp_fit = 7
+```
+
+```python
+fit_skewnorm_rp(3, rp_fit)
+```
+
+```python
+fit_skewnorm_rp(7, rp_fit)
+```
+
+```python
+
+```

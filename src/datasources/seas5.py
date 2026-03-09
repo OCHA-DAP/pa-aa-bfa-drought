@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal
 
 import xarray as xr
 from dask.diagnostics import ProgressBar
@@ -22,12 +22,16 @@ def open_seas5_cog(issued_date_str: str, lt: int):
     )
 
 
-def open_seas5_rasters(mo_lt_combos: List[dict] = None):
+def open_seas5_rasters(
+    mo_lt_combos: List[dict] = None, years: List[int] = None
+):
     if mo_lt_combos is None:
         # set to original IRI framework combinations
         mo_lt_combos = ORIGINAL_MO_LT_COMBOS
+    if years is None:
+        years = range(START_YEAR, END_YEAR + 1)
     das = []
-    for year in tqdm(range(START_YEAR, END_YEAR + 1)):
+    for year in tqdm(years):
         for mo_lt_combo in mo_lt_combos:
             mo = mo_lt_combo["mo"]
             for lt in mo_lt_combo["lts"]:
@@ -58,7 +62,10 @@ def process_seas5_rasters():
     blob_utils.upload_parquet_to_blob(df_seas5, blob_name)
 
 
-def load_seas5_stats():
-    blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_original_trigger_raster_stats.parquet"  # noqa
+def load_seas5_stats(variable: Literal["zscore", "abs", "anomaly"] = "abs"):
+    if variable == "abs":
+        blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_original_trigger_raster_stats.parquet"  # noqa
+    else:
+        blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_{variable}_q10.parquet"  # noqa
     df_seas5 = blob_utils.load_parquet_from_blob(blob_name)
     return df_seas5
