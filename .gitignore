@@ -137,6 +137,6 @@ dmypy.json
 
 # IPYNB
 
-*.ipynb
+#*.ipynb
 
 temp
