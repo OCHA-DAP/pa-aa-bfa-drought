@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.16.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: pa-aa-bfa-drought
     language: python
@@ -61,7 +61,7 @@ Set `window` based on monitoring window (1 is March, 2 is July).
 
 ```python
 window = 1
-year = 2025
+year = 2026
 ```
 
 ```python
@@ -215,8 +215,13 @@ ax.set_title(
     "centile historique des précipitations totales (années références 1981-2024)"
 )
 
+# bottom_text = (
+#     f"Fraction de avec centile < {THRESH*100:.0f} = {frac_area_triggering:.1f}"
+# )
+
 bottom_text = (
-    f"Fraction de avec centile < {THRESH*100:.0f} = {frac_area_triggering:.1f}"
+    f"Pourcentage de superficie avec centile historique < {THRESH*100:.0f}e = {frac_area_triggering*100:.1f}%\n"
+    "(Seuil : au moins 10 %)"
 )
 
 # Add the bottom text with smaller font, italicized
