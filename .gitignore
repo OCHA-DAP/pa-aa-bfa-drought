@@ -141,5 +141,5 @@ dmypy.json
 
 temp
 
-# Local NetCDF cache (regenerated from blob storage)
-notebooks/data/cache/
+# Local data files (regenerated from blob storage)
+notebooks/data/
