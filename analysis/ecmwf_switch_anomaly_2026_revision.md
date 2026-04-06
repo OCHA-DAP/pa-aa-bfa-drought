@@ -15,7 +15,9 @@ jupyter:
 
 # ECMWF anomaly and rank
 
-Doing the same thing as in `ecmwf_switch` but with anomaly and rank
+Doing the same thing as in `ecmwf_switch` but with anomaly and rank.
+
+Using only April for JJASO, as specified in 2026 framework revision
 
 <!-- markdownlint-disable MD013 -->
 
@@ -28,6 +30,7 @@ Doing the same thing as in `ecmwf_switch` but with anomaly and rank
 ```python
 import calendar
 
+import ocha_stratus as stratus
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -38,27 +41,54 @@ import statsmodels.api as sm
 from dask.diagnostics import ProgressBar
 from scipy.stats import skewnorm
 
-from src.datasources import seas5, iri, codab
+from src.datasources import seas5, iri, codab, era5
 from src.utils.raster import upsample_dataarray
-from src.utils.rp_calc import calculate_groups_rp
+from src.utils.rp_calc import calculate_groups_rp, calculate_one_group_rp
 from src.utils import blob_utils
 from src.constants import *
 ```
 
 ```python
-adm1 = codab.load_codab_from_blob(admin_level=1, aoi_only=True)
+adm2 = codab.load_codab_from_blob(admin_level=2)
+```
+
+```python
+adm2_aoi.to_crs(3857).area.sum()
+```
+
+```python
+adm2_aoi = adm2[adm2["ADM2_PCODE"].isin(AOI_ADM2_PCODES_2026)]
+```
+
+```python
+adm2_aoi.plot()
 ```
 
 ## Process anomaly
 
 ```python
-da_seas5 = seas5.open_seas5_rasters()
+new_mo_lt_combos = [{"mo": 4, "lts": [2, 3, 4, 5, 6]}]
+new_years = range(1981, 2025 + 1)
+```
+
+```python
+da_seas5 = seas5.open_seas5_rasters(
+    mo_lt_combos=new_mo_lt_combos, years=new_years
+)
+```
+
+```python
+da_seas5
 ```
 
 ```python
 da_seas5_tri = da_seas5.mean(dim="lt")
 da_seas5_up = upsample_dataarray(da_seas5_tri)
-da_seas5_clip = da_seas5_up.rio.clip(adm1.geometry)
+da_seas5_clip = da_seas5_up.rio.clip(adm2_aoi.geometry)
+```
+
+```python
+da_seas5_clip
 ```
 
 ```python
@@ -67,107 +97,9 @@ da_seas5_clip
 
 ```python
 fig, ax = plt.subplots(figsize=(8, 4))
-da_seas5_clip.isel(year=-1, issued_month=1).plot(ax=ax, cmap="RdBu")
-adm1.boundary.plot(ax=ax, color="k")
+da_seas5_clip.isel(year=-1).plot(ax=ax, cmap="RdBu")
+adm2_aoi.boundary.plot(ax=ax, color="k")
 ax.axis("off")
-```
-
-### Calculate mean
-
-Computing and plotting things as I go just to ensure they look sensible.
-
-```python
-da_seas5_mean = da_seas5_clip.mean(dim="year")
-```
-
-```python
-with ProgressBar():
-    da_seas5_mean_computed = da_seas5_mean.compute()
-```
-
-```python
-da_seas5_mean_computed.isel(issued_month=0).plot()
-```
-
-### Calculate anomaly
-
-```python
-da_seas5_anomaly = (
-    da_seas5_clip - da_seas5_mean_computed
-) / da_seas5_mean_computed
-```
-
-```python
-with ProgressBar():
-    da_seas5_anomaly_computed = da_seas5_anomaly.compute()
-```
-
-```python
-fig, ax = plt.subplots(figsize=(8, 4))
-da_seas5_anomaly_computed.isel(year=-1, issued_month=1).plot(
-    ax=ax, cmap="RdBu"
-)
-adm1.boundary.plot(ax=ax, color="k")
-ax.axis("off")
-```
-
-```python
-da_seas5_anomaly_q = da_seas5_anomaly_computed.quantile(
-    q=ORIGINAL_Q, dim=["x", "y"]
-)
-```
-
-```python
-with ProgressBar():
-    da_seas5_anomaly_q_computed = da_seas5_anomaly_q.compute()
-```
-
-```python
-da_seas5_anomaly_q_computed.isel(issued_month=0).plot()
-```
-
-```python
-vmin = da_seas5_anomaly_computed.sel(year=2015, issued_month=3).min()
-vmax = -vmin
-```
-
-```python
-da_seas5_anomaly_computed.sel(year=2015, issued_month=3).plot(
-    vmin=vmin, vmax=vmax, cmap="RdBu"
-)
-```
-
-```python
-da_seas5_anomaly_computed.sel(year=2019, issued_month=3).plot(
-    vmin=vmin, vmax=vmax, cmap="RdBu"
-)
-```
-
-### Write to `df` and save to blob
-
-```python
-df_seas5_anomaly_q = da_seas5_anomaly_q_computed.to_dataframe("q")[
-    "q"
-].reset_index()
-```
-
-```python
-df_seas5_anomaly_q["q"].hist()
-```
-
-```python
-df_seas5_anomaly_q["q"].quantile(1 / 3)
-```
-
-```python
-df_seas5_anomaly_q
-```
-
-<!-- markdownlint-disable MD013 -->
-
-```python
-blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_anomaly_q10.parquet"  # noqa
-blob_utils.upload_parquet_to_blob(df_seas5_anomaly_q, blob_name)
 ```
 
 ## Process rank/percentile
@@ -194,13 +126,7 @@ vmin, vmax = 0, 1
 ```
 
 ```python
-da_seas5_rank_computed.sel(year=2015, issued_month=3).plot(
-    cmap="RdBu", vmin=vmin, vmax=vmax
-)
-```
-
-```python
-da_seas5_rank_computed.sel(year=2019, issued_month=3).plot(
+da_seas5_rank_computed.sel(year=2015, issued_month=4).plot(
     cmap="RdBu", vmin=vmin, vmax=vmax
 )
 ```
@@ -223,8 +149,60 @@ df_seas5_rank_q["q"].hist()
 ```
 
 ```python
-blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_rank_q10.parquet"  # noqa
+blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_rank_q10_2026.parquet"  # noqa
 blob_utils.upload_parquet_to_blob(df_seas5_rank_q, blob_name)
+```
+
+### For ERA5
+
+```python
+da_era5 = era5.open_era5_rasters(months=[6, 7, 8, 9, 10])
+```
+
+```python
+da_era5
+```
+
+```python
+da_era5_tri = da_era5.mean(dim="issued_month")
+da_era5_up = upsample_dataarray(da_era5_tri)
+da_era5_clip = da_era5_up.rio.clip(adm2_aoi.geometry)
+```
+
+```python
+da_era5_clip_yearchunk = da_era5_clip.chunk({"year": -1})
+```
+
+```python
+da_era5_rank = da_era5_clip_yearchunk.rank(dim="year", pct=True)
+```
+
+```python
+with ProgressBar():
+    da_era5_rank_computed = da_era5_rank.compute()
+```
+
+```python
+da_era5_rank_computed.isel(year=0).plot()
+```
+
+```python
+da_era5_rank_q_computed = da_era5_rank_computed.quantile(
+    q=ORIGINAL_Q, dim=["x", "y"]
+)
+```
+
+```python
+df_era5_rank_q = da_era5_rank_q_computed.to_dataframe("q")["q"].reset_index()
+```
+
+```python
+df_era5_rank_q
+```
+
+```python
+blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/era5/era5_rank_q10_2026.parquet"  # noqa
+blob_utils.upload_parquet_to_blob(df_era5_rank_q, blob_name)
 ```
 
 ## SEAS5 thresholds
@@ -232,30 +210,107 @@ blob_utils.upload_parquet_to_blob(df_seas5_rank_q, blob_name)
 ### Loading and processing
 
 ```python
-df_seas5_anomaly = seas5.load_seas5_stats(variable="anomaly")
+blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/seas5/seas5_rank_q10_2026.parquet"  # noqa
+df_seas5_rank_q = stratus.load_parquet_from_blob(blob_name)
 ```
 
 ```python
-df_seas5_zscore = seas5.load_seas5_stats(variable="zscore")
+df_seas5_rank_q = calculate_one_group_rp(df_seas5_rank_q, col_name="q")
 ```
 
 ```python
-df_seas5_rank = seas5.load_seas5_stats(variable="rank")
+blob_name = f"{blob_utils.PROJECT_PREFIX}/processed/era5/era5_rank_q10_2026.parquet"  # noqa
+df_era5_rank_q = stratus.load_parquet_from_blob(blob_name)
 ```
 
 ```python
-df_seas5_compare = df_seas5_anomaly.merge(
-    df_seas5_zscore,
-    suffixes=("_anomaly", "_zscore"),
-    on=["issued_month", "year"],
-).merge(
-    df_seas5_rank.rename(columns={"q": "q_rank"}), on=["issued_month", "year"]
+df_seas5_rank_q = calculate_one_group_rp(df_seas5_rank_q, col_name="q")
+```
+
+```python
+df_seas5_rank_q[df_seas5_rank_q["year"] >= 2000].sort_values("q_rank")
+```
+
+```python
+df_era5_rank_q = calculate_one_group_rp(df_era5_rank_q, col_name="q")
+```
+
+```python
+df_era5_rank_q[df_era5_rank_q["year"] >= 2000].sort_values("q_rank")
+```
+
+```python
+df_compare = df_era5_rank_q.merge(
+    df_seas5_rank_q, on="year", suffixes=("_e", "_s")
 )
-df_seas5_compare = df_seas5_compare[df_seas5_compare["year"] >= 2000]
 ```
 
 ```python
-df_seas5_compare
+df_compare.plot(x="q_s", y="q_e", marker=".", linewidth=0)
+```
+
+```python
+df_compare.corr()
+```
+
+```python
+df_compare.plot(x="year", y=["q_e", "q_s"])
+```
+
+```python
+df_seas5_rank_q_recent = df_seas5_rank_q[
+    df_seas5_rank_q["year"] >= 2000
+].copy()
+```
+
+```python
+df_seas5_rank_q_recent = calculate_one_group_rp(
+    df_seas5_rank_q_recent, col_name="q"
+)
+```
+
+```python
+df_seas5_rank_q_recent.sort_values("q_rank")
+```
+
+```python
+(2025-2001+1+1)/4
+```
+
+```python
+4/(2025-2001+1+1)
+```
+
+```python
+5/(2025-2001+1+1)
+```
+
+```python
+(2025-2001+1+1)/5
+```
+
+```python
+(2025-2001+1+1)/6
+```
+
+```python
+(2025-2001+1+1)/7
+```
+
+```python
+(2025 - 2001 + 1 + 1) / 8
+```
+
+```python
+8 / (2025 - 2001 + 1 + 1)
+```
+
+```python
+8 / (2025 - 2001 + 1 + 1) * 8
+```
+
+```python
+
 ```
 
 Quick comparison of the three metrics shows high correlation as expected.

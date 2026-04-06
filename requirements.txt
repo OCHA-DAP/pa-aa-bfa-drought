@@ -17,3 +17,8 @@ tqdm==4.66.1
 matplotlib==3.8.2
 seaborn==0.13.2
 bottleneck==1.4.2
+cdsapi>=0.7.0
+scikit-learn>=1.4.0
+scipy>=1.13.0
+cartopy>=0.23.0
+marimo

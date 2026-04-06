@@ -1,5 +1,6 @@
 from typing import List, Literal
 
+import ocha_stratus as stratus
 import xarray as xr
 from dask.diagnostics import ProgressBar
 from tqdm.auto import tqdm
@@ -10,14 +11,14 @@ from src.utils import blob_utils
 from src.utils.raster import upsample_dataarray
 
 START_YEAR = 1981
-END_YEAR = 2024
+END_YEAR = 2025
 
 
 def open_seas5_cog(issued_date_str: str, lt: int):
     blob_name = (
         f"seas5/monthly/processed/precip_em_i{issued_date_str}_lt{lt}.tif"
     )
-    return blob_utils.open_blob_cog(
+    return stratus.open_blob_cog(
         blob_name, stage="prod", container_name="raster"
     )
 

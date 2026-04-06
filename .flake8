@@ -1,2 +1,4 @@
 [flake8]
-extend-ignore = E203
+extend-ignore = E203, E501
+per-file-ignores =
+    notebooks/*.py: F401, F841

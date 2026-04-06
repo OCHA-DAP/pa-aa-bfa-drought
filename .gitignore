@@ -140,3 +140,6 @@ dmypy.json
 #*.ipynb
 
 temp
+
+# Local NetCDF cache (regenerated from blob storage)
+notebooks/data/cache/

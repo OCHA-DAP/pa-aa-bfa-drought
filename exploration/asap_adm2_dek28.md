@@ -6,14 +6,16 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.16.1
+      jupytext_version: 1.19.1
   kernelspec:
     display_name: pa-aa-bfa-drought
     language: python
     name: pa-aa-bfa-drought
 ---
 
-# ASAP warnings
+# ASAP warnings - admin2
+
+Using the admin2s that define the new 2026 AOI
 
 <!-- markdownlint-disable MD013 -->
 
@@ -39,7 +41,11 @@ from src.utils import dekad, blob_utils, rp_calc
 ```
 
 ```python
-# asap.process_asap_warnings()
+# filepath = "temp/warnings_l2_ts.csv"
+```
+
+```python
+# asap.process_asap_warnings_adm2(filepath=filepath)
 ```
 
 ## Load pre-filtered data
@@ -47,7 +53,11 @@ from src.utils import dekad, blob_utils, rp_calc
 And do some light processing
 
 ```python
-df_asap = asap.load_processed_asap_warnings()
+df_asap = asap.load_processed_asap_warnings_adm2()
+```
+
+```python
+df_asap
 ```
 
 ```python
@@ -65,7 +75,7 @@ for crop_range in ["crop", "range"]:
     )
 
 df_asap["year"] = df_asap["date"].dt.year
-df_asap = df_asap[df_asap["year"] <= 2024].copy()
+df_asap = df_asap[df_asap["year"] <= 2025].copy()
 ```
 
 ```python
@@ -88,6 +98,50 @@ all_years = df_asap["date"].dt.year.unique()
 all_years
 ```
 
+```python
+target_years = [2022, 2019, 2017, 2014, 2011]
+```
+
+```python
+df_compare = df_asap.copy()
+```
+
+```python
+df_compare
+```
+
+```python
+df_compare["target"] = df_compare["year"].isin(target_years)
+```
+
+```python
+
+```
+
+```python
+dfs = []
+for adm_name, adm_group in df_compare.groupby("asap2_name"):
+    for dekad, dekad_group in adm_group.groupby("dekad"):
+        _df_corr = dekad_group.corr(numeric_only=True)["target"][
+            ["w_crop_gr_int", "w_range_gr_int"]
+        ].reset_index()
+        _df_corr["dekad"] = dekad
+        _df_corr["asap2_name"] = adm_name
+        dfs.append(_df_corr)
+```
+
+```python
+df_corr = pd.concat(dfs, ignore_index=True)
+```
+
+```python
+for adm_name, group in df_corr.groupby("asap2_name"):
+    fig, ax = plt.subplots(figsize=(15, 5))
+    df_plot = group.pivot(index="dekad", columns="index", values="target")
+    df_plot.plot.bar(ax=ax)
+    ax.set_title(adm_name)
+```
+
 ## Cycle through ASAP warning options
 
 There's various ways to combine the warnings, but I broke it down to:
@@ -100,15 +154,15 @@ There's various ways to combine the warnings, but I broke it down to:
 # options
 
 crop_range_options = ["OR", "AND"]
-minimum_adm1s_options = [1, 2, 3, 4]
+minimum_adm2s_options = [1, 2, 3, 4]
 alert_level_options = [1, 2, 3, 4]
 ```
 
 ```python
 # set first possible trigger dekad to 3rd dekad of July
 min_dekad = 21
-# set last possible trigger dekad to 3rd dekad of Oct
-max_dekad = 30
+# set last possible trigger dekad to 1st dekad of Oct
+max_dekad = 28
 
 df_monitoring = df_asap[
     (df_asap["dekad"] >= min_dekad) & (df_asap["dekad"] <= max_dekad)
@@ -116,7 +170,7 @@ df_monitoring = df_asap[
 
 dfs = []
 for crop_range in crop_range_options:
-    for minimum_adm1s in minimum_adm1s_options:
+    for minimum_adm2s in minimum_adm2s_options:
         for alert_level in alert_level_options:
             dff = df_monitoring.copy()
             if crop_range == "OR":
@@ -133,18 +187,18 @@ for crop_range in crop_range_options:
             adm_counts = (
                 dff.groupby("year")
                 .agg(
-                    count_adm1s=("ADM1_PCODE", "nunique"),
+                    count_adm2s=("ADM2_PCODE", "nunique"),
                     min_dekad=("dekad", "min"),
                 )
                 .reset_index()
             )
             display(adm_counts)
             trigger_years = adm_counts[
-                adm_counts["count_adm1s"] >= minimum_adm1s
+                adm_counts["count_adm2s"] >= minimum_adm2s
             ][["year", "min_dekad"]]
-            trigger_years[["crop_range", "minadm1s", "al"]] = (
+            trigger_years[["crop_range", "minadm2s", "al"]] = (
                 crop_range,
-                minimum_adm1s,
+                minimum_adm2s,
                 alert_level,
             )
             dfs.append(trigger_years)
@@ -155,7 +209,7 @@ df_triggers = pd.concat(dfs, ignore_index=True)
 ```python
 df_triggers[
     (df_triggers["crop_range"] == "OR")
-    & (df_triggers["minadm1s"] == 4)
+    & (df_triggers["minadm2s"] == 4)
     & (df_triggers["al"] == 4)
 ]
 ```
@@ -164,7 +218,7 @@ df_triggers[
 
 ```python
 df_rps = (
-    df_triggers.groupby(["crop_range", "minadm1s", "al"])
+    df_triggers.groupby(["crop_range", "minadm2s", "al"])
     .agg(count=("year", "size"), min_dekad=("min_dekad", "mean"))
     .reset_index()
 )
@@ -187,7 +241,7 @@ def plot_asap_heatmap(crop_range):
     norm = mcolors.BoundaryNorm(bounds, cmap.N)
     crop_range_fr = "OU" if crop_range == "OR" else "ET"
     df_plot = df_rps[df_rps["crop_range"] == crop_range].pivot(
-        values="rp", columns="minadm1s", index="al"
+        values="rp", columns="minadm2s", index="al"
     )
 
     fig, ax = plt.subplots(dpi=200)
@@ -218,7 +272,7 @@ plot_asap_heatmap("AND")
 def plot_asap_heatmap_min_dekad(crop_range):
     crop_range_fr = "OU" if crop_range == "OR" else "ET"
     df_plot = df_rps[df_rps["crop_range"] == crop_range].pivot(
-        values="min_dekad", columns="minadm1s", index="al"
+        values="min_dekad", columns="minadm2s", index="al"
     )
 
     fig, ax = plt.subplots(dpi=200)
@@ -233,7 +287,7 @@ def plot_asap_heatmap_min_dekad(crop_range):
     ax.set_title(
         f"Première décade de déclenchement ASAP\n(agricole {crop_range_fr} pâturage)"
     )
-    ax.set_xlabel("Nombre de régions avec alerte")
+    ax.set_xlabel("Nombre de provinces avec alerte")
     ax.set_ylabel("Niveau d'alerte minimum")
 ```
 
@@ -248,7 +302,7 @@ plot_asap_heatmap_min_dekad("AND")
 ```python
 # set naming structure for ASAP triggers
 ASAP_COL = (
-    "Niveau ≥ {al}<br>N. régions ≥ {minadm1s}<br>" "Ag. {crop_range_fr} Pât."
+    "Niveau ≥ {al}<br>N. provinces ≥ {minadm2s}<br>" "Ag. {crop_range_fr} Pât."
 )
 ```
 
@@ -258,7 +312,7 @@ ASAP_COL = (
 # but this works for now
 def extract_asap_params(formatted_string):
     # Define a regular expression pattern to match the expected format, allowing crop_range_fr to be a string
-    pattern = r"Niveau ≥ (?P<al>\d+)<br>N\. régions ≥ (?P<minadm1s>\d+)<br>Ag\. (?P<crop_range_fr>[\w\s]+) Pât\."
+    pattern = r"Niveau ≥ (?P<al>\d+)<br>N\. provinces ≥ (?P<minadm1s>\d+)<br>Ag\. (?P<crop_range_fr>[\w\s]+) Pât\."
 
     # Search the string for matches
     match = re.search(pattern, formatted_string)
@@ -266,7 +320,7 @@ def extract_asap_params(formatted_string):
     if match:
         # Extract the matched values
         al = match.group("al")
-        minadm1s = match.group("minadm1s")
+        minadm2s = match.group("minadm2s")
         crop_range_fr = match.group("crop_range_fr")
         return al, minadm1s, crop_range_fr
     else:
@@ -280,12 +334,12 @@ df_asap_yearly = pd.DataFrame(data={"year": range(2001, 2025)})
 for _, row in df_rps.iterrows():
     crop_range_fr = "OU" if row["crop_range"] == "OR" else "ET"
     col_name = ASAP_COL.format(
-        al=row["al"], minadm1s=row["minadm1s"], crop_range_fr=crop_range_fr
+        al=row["al"], minadm2s=row["minadm2s"], crop_range_fr=crop_range_fr
     )
     df_triggers_f = df_triggers[
         (df_triggers["crop_range"] == row["crop_range"])
         & (df_triggers["al"] == row["al"])
-        & (df_triggers["minadm1s"] == row["minadm1s"])
+        & (df_triggers["minadm2s"] == row["minadm2s"])
     ]
     df_asap_yearly[col_name] = df_asap_yearly["year"].apply(
         lambda x: x in df_triggers_f["year"].unique()
@@ -300,7 +354,7 @@ crop_range
 df_triggers[
     (df_triggers["crop_range"] == crop_range)
     & (df_triggers["al"] == row["al"])
-    & (df_triggers["minadm1s"] == row["minadm1s"])
+    & (df_triggers["minadm2s"] == row["minadm2s"])
 ]
 ```
 
@@ -327,11 +381,11 @@ def display_asap_activations(crop_range):
 
     df_disp = pd.DataFrame(data={"year": range(2001, 2025)})
     for _, row in dff.iterrows():
-        col_name = f'Niveau ≥ {row["al"]}<br>N. régions ≥ {row["minadm1s"]}'
+        col_name = f'Niveau ≥ {row["al"]}<br>N. provinces ≥ {row["minadm2s"]}'
         df_triggers_f = df_triggers[
             (df_triggers["crop_range"] == crop_range)
             & (df_triggers["al"] == row["al"])
-            & (df_triggers["minadm1s"] == row["minadm1s"])
+            & (df_triggers["minadm2s"] == row["minadm2s"])
         ]
         df_disp[col_name] = df_disp["year"].apply(
             lambda x: x in df_triggers_f["year"].unique()
