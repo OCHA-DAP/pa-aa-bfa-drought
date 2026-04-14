@@ -13,13 +13,13 @@ jupyter:
     name: pa-aa-bfa-drought
 ---
 
-# SEAS5 monitoring 2025
+# SEAS5 monitoring 2026
 
 <!-- markdownlint-disable MD013 -->
 
-Monitoring SEAS5 forecast for 2025 updated framework.
+Monitoring SEAS5 forecast for 2026 updated framework.
 
-Trigger if AOI has at least 10% of area with seasonal rainfall in lowest quintile.
+Trigger if AOI has at least 50% of area with seasonal rainfall in lowest tercile.
 
 ```python
 %load_ext jupyter_black
@@ -44,7 +44,7 @@ from src.utils.raster import upsample_dataarray
 ```
 
 ```python
-THRESH = 0.2
+THRESH = 1 / 3
 ```
 
 ## Load data
@@ -52,28 +52,18 @@ THRESH = 0.2
 ### CODAB
 
 ```python
-adm1 = codab.load_codab_from_blob(admin_level=1, aoi_only=True)
+# adm1 = codab.load_codab_from_blob(admin_level=1, aoi_only=True)
+adm2 = codab.load_codab_from_blob(admin_level=2)
+adm2_aoi = adm2[adm2["ADM2_PCODE"].isin(AOI_ADM2_PCODES_2026)]
 ```
 
 ### SEAS5 current
 
-Set `window` based on monitoring window (1 is March, 2 is July).
-
 ```python
-window = 1
 year = 2026
 ```
 
 ```python
-mo_lt_combos = ORIGINAL_MO_LT_COMBOS[:window]
-```
-
-```python
-mo_lt_combos
-```
-
-```python
-# override for testing
 mo_lt_combos = [{"mo": 4, "lts": [2, 3, 4, 5, 6]}]
 ```
 
@@ -89,7 +79,7 @@ da_seas5 = seas5.open_seas5_rasters(mo_lt_combos=mo_lt_combos, years=[year])
 # squeeze to remove issued_month
 da_seas5_tri = da_seas5.mean(dim="lt").squeeze(drop=True)
 da_seas5_up = upsample_dataarray(da_seas5_tri)
-da_seas5_clip = da_seas5_up.rio.clip(adm1.geometry)
+da_seas5_clip = da_seas5_up.rio.clip(adm2_aoi.geometry)
 ```
 
 ```python
@@ -112,7 +102,7 @@ da_seas5_historical = seas5.open_seas5_rasters(mo_lt_combos=mo_lt_combos)
 # squeeze to remove issued_month
 da_seas5_tri_h = da_seas5_historical.mean(dim="lt").squeeze(drop=True)
 da_seas5_up_h = upsample_dataarray(da_seas5_tri_h)
-da_seas5_clip_h = da_seas5_up_h.rio.clip(adm1.geometry)
+da_seas5_clip_h = da_seas5_up_h.rio.clip(adm2_aoi.geometry)
 ```
 
 ```python
@@ -158,13 +148,13 @@ da_current_percentile.plot(vmin=0, vmax=1)
 
 ### Calculate spatial quantile
 
-Take the 10th spatial quantile. It it's below the theshold (20%), trigger.
+Take the median. It it's below the theshold (33%), trigger.
 
 ```python
-da_current_percentile.quantile(ORIGINAL_Q, dim=["x", "y"])
+da_current_percentile.median(dim=["x", "y"])
 ```
 
-Conversely we can look at the fraction of the area under the threshold. If it's above 10%, trigger.
+Conversely we can look at the fraction of the area under the threshold. If it's above 50%, trigger.
 
 ```python
 da_triggering = (da_current_percentile < THRESH).where(
@@ -197,43 +187,30 @@ v_mo_fr = ", ".join(
 ```
 
 ```python
-boundaries = [0, 0.2, 0.4, 0.6, 0.8, 1.0]
+boundaries = [0, 1 / 3, 2 / 3, 1.0]
 colors = [
     "crimson",
-    "gold",
     "lightgrey",
-    "lightskyblue",
     "dodgerblue",
-]  # specify your desired colors
-
+]  # below normal, near normal, above normal
 # Create a custom colormap
 cmap = mcolors.ListedColormap(colors)
-
 # Normalize the values to the specified boundaries
 norm = mcolors.BoundaryNorm(boundaries, cmap.N)
-
 # Plot the data
 fig, ax = plt.subplots(dpi=200, figsize=(12, 5))
 da_current_percentile.plot(cmap=cmap, norm=norm, ax=ax, add_colorbar=False)
 ax.axis("off")
-
-adm1.boundary.plot(ax=ax, color="k", linewidth=0.5)
-
+adm2_aoi.boundary.plot(ax=ax, color="k", linewidth=1)
+adm2.boundary.plot(ax=ax, color="k", linewidth=0.5)
 ax.set_title(
     f"Prévisions SEAS5 publiées en {mo_fr} {year} pour {v_mo_fr},\n"
-    "centile historique des précipitations totales (années références 1981-2024)"
+    "centile historique des précipitations totales (années références 1981-2025)"
 )
-
-# bottom_text = (
-#     f"Fraction de avec centile < {THRESH*100:.0f} = {frac_area_triggering:.1f}"
-# )
-
 bottom_text = (
-    f"Pourcentage de superficie avec centile historique < {THRESH*100:.0f}e = {frac_area_triggering*100:.1f}%\n"
-    "(Seuil : au moins 10 %)"
-)
-
-# Add the bottom text with smaller font, italicized
+    f"Pourcentage de superficie avec précipitations dans tercile inférieur = {frac_area_triggering*100:.1f} %\n"
+    "(Seuil : au moins 50 %)"
+).replace(".", ",")
 ax.text(
     0.5,
     -0.1,
@@ -245,13 +222,30 @@ ax.text(
     style="italic",
     color="black",
 )
+adm2_aoi.boundary.plot(ax=ax, color="k", linewidth=0.5)
 
-
+# Add ADM2 labels
+for _, row in adm2_aoi.iterrows():
+    ax.annotate(
+        row["ADM2_FR"],
+        xy=(row.geometry.centroid.x, row.geometry.centroid.y),
+        ha="center",
+        va="center",
+        fontsize=10,
+        color="black",
+    )
 cbar = plt.colorbar(
     ax.collections[0], ax=ax, norm=norm, cmap=cmap, boundaries=boundaries
 )
-cbar.set_label("Centile historique")
+cbar.set_label("Tercile historique")
 cbar.ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{x*100:.0f}e"))
+cbar.set_ticks([1 / 6, 1 / 2, 5 / 6])
+cbar.set_ticklabels(["Inf. normal", "Normal", "Sup. normal"])
+
+ymin, ymax = ax.get_ylim()
+xmin, xmax = ax.get_xlim()
+ax.set_ylim(ymin, ymax + (ymax - ymin) * 0.05)
+ax.set_xlim(xmin - (xmax - xmin) * 0.05, xmax + (xmax - xmin) * 0.05)
 ```
 
 ## Testing
