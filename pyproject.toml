@@ -1,6 +1,47 @@
+[project]
+name = "pa-aa-bfa-drought"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "altair==4.2.0",
+    "bokeh==2.4.1",
+    "holoviews==1.14.6",
+    "hvplot==0.7.3",
+    "python-dateutil==2.8.2",
+    "geopandas==1.0.1",
+    "pandas==2.2.2",
+    "rioxarray==0.17.0",
+    "xarray==2024.7.0",
+    "azure-storage-blob==12.22.0",
+    "python-dotenv==1.0.1",
+    "sqlalchemy==2.0.36",
+    "psycopg2-binary==2.9.10",
+    "pyarrow==17.0.0",
+    "dask==2024.8.0",
+    "tqdm==4.66.1",
+    "matplotlib==3.8.2",
+    "seaborn==0.13.2",
+    "bottleneck==1.4.2",
+    "cdsapi>=0.7.0",
+    "scikit-learn>=1.4.0",
+    "scipy>=1.13.0",
+    "cartopy>=0.23.0",
+    "marimo",
+]
+
 [tool.black]
 line-length = 79
 
 [tool.isort]
 profile = "black"
 line_length = 79
+
+[dependency-groups]
+dev = [
+    "black==24.3.0",
+    "isort==5.13.2",
+    "jupyter-black==0.3.4",
+    "pre-commit==3.8.0",
+    "jupytext==1.16.3",
+    "python-dotenv==1.0.1",
+]
