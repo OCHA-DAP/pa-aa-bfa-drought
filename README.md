@@ -2,6 +2,11 @@
 
 [![Generic badge](https://img.shields.io/badge/STATUS-ENDORSED-%231EBFB3)](https://shields.io/)
 
+
+**Site:** analyses and monitoring notes are published at
+<https://ocha-dap.github.io/ds-aa-bfa-drought/> (source in
+[OCHA-DAP/ds-aa-bfa-drought](https://github.com/OCHA-DAP/ds-aa-bfa-drought)).
+
 ## Background information
 
 The pilot on Anticipatory Action in Burkina Faso is on seasonal drought.
