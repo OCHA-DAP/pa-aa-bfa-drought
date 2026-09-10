@@ -1,0 +1,50 @@
+name: Deploy pages site to GitHub Pages
+
+# Publishes pages/ as the repo's GitHub Pages site: a landing page at / with each
+# write-up under its own path (team convention — one Pages site per repo, landing
+# page + product paths; see the KB page methods/static-data-apps.md).
+#
+# Template: OCHA-DAP/ds-seas5-skill deploy-pages.yml. No build step, no Python, no
+# credentials: pages/ is copied as-is. configure-pages with enablement: true creates
+# the Pages site in workflow mode on the first run.
+#
+# The endorsed 2026 framework work lives on the 2026-revision branch, so that branch
+# deploys too (the github-pages environment must allow it — see pages/README.md).
+
+on:
+  push:
+    branches: [main, 2026-revision]
+    paths: ["pages/**", ".github/workflows/deploy-pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble site
+        run: |
+          mkdir -p site
+          rsync -a pages/ site/
+          test -f site/index.html
+          test -f site/external-sources-sep-2026/index.html
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
